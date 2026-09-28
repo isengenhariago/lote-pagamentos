@@ -583,7 +583,12 @@ function adaptar(fs){ return {
     onSnapshot:(next,err)=>r.onSnapshot(ds=>next({exists:ds.exists, data:()=>ds.data()||{}}), err) }; } }; }
 function telaAcesso(html){ st.carregando=false; st.telaAcesso=html; $("#app").innerHTML=html; $("#rodInfo").innerHTML=""; atualizarSelo(); }
 function entrar(){ const prov=new firebase.auth.GoogleAuthProvider(); prov.setCustomParameters({prompt:"select_account"});
-  AUTH.signInWithPopup(prov).catch(e=>{ if(e && /popup/.test(e.code||"")) AUTH.signInWithRedirect(prov); else toast("Não foi possível entrar: "+((e&&e.code)||"erro")); }); }
+  AUTH.signInWithPopup(prov).catch(e=>{ const c=(e&&e.code)||"erro";
+    if(c==="auth/popup-closed-by-user"||c==="auth/cancelled-popup-request") return;
+    const msg = c==="auth/popup-blocked"
+      ? "O navegador bloqueou a janela de login. Abra este link direto no <b>Safari</b> (não pelo WhatsApp) e, se precisar, desative em Ajustes → Safari → Bloquear pop-ups."
+      : "Não foi possível entrar ("+esc(c)+"). Abra o link direto no Safari e tente de novo.";
+    const el=document.getElementById("msgLogin"); if(el) el.innerHTML=msg; else toast("Não foi possível entrar: "+c); }); }
 function sair(){ if(AUTH) AUTH.signOut().then(()=>location.reload()); }
 function iniciarCompartilhado(){
   if(!window.firebase || String(FIREBASE_CONFIG.apiKey).startsWith("COLE")){
@@ -591,11 +596,10 @@ function iniciarCompartilhado(){
   firebase.initializeApp(FIREBASE_CONFIG);
   AUTH=firebase.auth(); const fs=firebase.firestore();
   st.carregando=true; st.shared=true; st.fonte="mc"; FORNECEDORES={}; indexarForn(); st.itens=[];
-  AUTH.getRedirectResult().catch(()=>{});
   let desligar=[];
   AUTH.onAuthStateChanged(u=>{
     desligar.forEach(f=>{ try{f();}catch(e){} }); desligar=[];
-    if(!u){ telaAcesso(`<div class="vazio"><p>Entre com a conta Google autorizada para ver o lote.</p><button class="btn pri" id="btnEntrar">Entrar com Google</button></div>`); return; }
+    if(!u){ telaAcesso(`<div class="vazio"><p>Entre com a conta Google autorizada para ver o lote.</p><button class="btn pri" id="btnEntrar">Entrar com Google</button><p class="aviso" id="msgLogin" style="margin-top:12px"></p><p class="meta" style="margin-top:8px">No iPhone, abra pelo Safari. Links abertos de dentro do WhatsApp não conseguem fazer o login.</p></div>`); return; }
     const email=(u.email||"").toLowerCase();
     if(!USUARIOS[email]){ telaAcesso(`<div class="vazio"><p>A conta <b>${esc(email)}</b> não tem acesso a este lote.</p><button class="btn" id="btnSair">Sair e usar outra conta</button></div>`); return; }
     st.telaAcesso=""; MEU_ID=email; NOMES={...USUARIOS};
