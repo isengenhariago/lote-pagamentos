@@ -137,6 +137,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
   <div class="modo" role="group" aria-label="Quem está usando">
     <button id="mEmily" aria-pressed="true">Emily · conferir</button>
     <button id="mIago" aria-pressed="false">Iago · pagar</button>
+    <button id="mHist" aria-pressed="false">Histórico</button>
   </div>
 
   <main id="app"></main>
@@ -226,6 +227,11 @@ function fav(it){ return it.favManual || it.favLanc || fornCad(it).fav || (chave
 function pronto(it){ if(it.chaveAvulsa && !it.confirmada) return false; return conta(it) && chave(it) && (it.tipo==="Boleto" || fav(it)); }
 function duplicado(it){ const k=chave(it); if(!k || !(it.tipo==="Boleto" || /^000201/.test(k))) return null;
   return st.itens.find(o=>o!==it && o.status!=="recusado" && chave(o)===k) || null; }
+function alertaHist(it, paraIago){ const j=it.jaPago; if(!j) return "";
+  if(!j.exato && paraIago) return "";
+  const d=j.em?new Date(j.em):null, quando=d?d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})+" às "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"";
+  if(j.exato) return `<div class="aviso" style="margin-top:8px">⚠ Este mesmo lançamento já foi pago ${quando?"em "+quando:""}${j.por?" por "+esc(nome(j.por)):""} · ${brl(j.valor)}. Verifique se a baixa foi dada no Mais Controle.</div>`;
+  return `<div class="meta" style="margin-top:8px;color:var(--ouro);font-weight:600">Double check: pagamento parecido (mesmo fornecedor, valor e obra) pago ${quando?"em "+quando:""}${j.desc?" · "+esc(j.desc):""}. Se for uma nova medição, é só conferir normalmente.</div>`; }
 function alertaCC(it){ const k=chave(it); const d=duplicado(it);
   const dup = d ? `⚠ Mesmo código usado em outro pagamento: ${d.forn} · ${brl(d.valor)} · ${d.obra}` : "";
   if(it.tipo==="Boleto"||!/^000201/.test(k)) return dup?`<div class="meta" style="color:var(--alerta);font-weight:600;margin-top:6px">${esc(dup)}</div>`:"";
@@ -296,7 +302,7 @@ function renderEmily(){
     const cls = it.status==="recusado"?"rec": it.status==="conferido"?"ok": ok?"":"pend";
     h += `<article class="item ${cls}">
       <div class="linha1"><span class="forn">${esc(it.forn)}</span><span class="valor">${brl(it.valor)}</span></div>
-      <div class="meta">${[esc(it.oc), it.nf?'Doc. '+esc(it.nf):'', 'Obra '+esc(it.obra), esc(it.desc), it.etapa?esc(it.etapa):'', vencTxt(it), it.sol?'pedido por '+esc(it.sol):''].filter(Boolean).join(' · ')}</div>
+      <div class="meta">${[esc(it.oc), it.nf?'Doc. '+esc(it.nf):'', 'Obra '+esc(it.obra), esc(it.desc), it.etapa?esc(it.etapa):'', vencTxt(it), it.sol?'pedido por '+esc(it.sol):''].filter(Boolean).join(' · ')}</div>${alertaHist(it)}
       <div class="campos">
         <div class="campo"><label>Conta pagadora ${it.contaMC?'<span class="auto">do Mais Controle</span>':OBRA_CONTA[it.obra]?'<span class="auto">automático pela obra</span>':''}</label>
           ${c && !it.contaManual ? `<div class="val">${esc(c)}</div>` :
@@ -325,7 +331,7 @@ function renderEmily(){
           <select data-mot="${it.id}" aria-label="Motivo da recusa"><option value="">Recusar…</option>
             <option>R1 OC inexistente</option><option>R2 Valor divergente</option><option>R3 Favorecido não confere</option>
             <option>R4 Dados de pagamento incorretos</option><option>R5 Pedido duplicado</option><option>R7 Sem saldo na etapa</option><option>R8 Sem anexo</option></select>`
-        : it.status==="conferido" && it.pago ? `<span class="tag rec" style="background:var(--ouro-lt);color:var(--ouro)">Pago${it.pagoPor?' por '+esc(nome(it.pagoPor)):''}${it.pagoEm?' às '+new Date(it.pagoEm).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):''} · dar baixa no Mais Controle</span>`
+        : it.status==="conferido" && it.pago ? `<span class="tag rec" style="background:var(--ouro-lt);color:var(--ouro)">Pago${it.pagoPor?' por '+esc(nome(it.pagoPor)):''}${it.pagoEm?' às '+new Date(it.pagoEm).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):''} · dar baixa no Mais Controle</span>${DB?`<button class="btn pri" data-baixa="${it.id}">✓ Baixa dada no Mais Controle</button>`:''}`
         : it.status==="conferido" ? `<span class="tag ok">No lote das ${st.janela}</span><button class="btn" data-desf="${it.id}">Desfazer</button>`
         : `<span class="tag rec">Recusado · ${esc(it.motivo)}</span><button class="btn" data-desf="${it.id}">Desfazer</button>`}
       </div>
@@ -338,6 +344,30 @@ function renderEmily(){
 }
 
 // ---------- IAGO ----------
+const HIST={itens:[], carregadoEm:0, filtro:"", carregando:false};
+async function carregarHist(){ if(!DB||!DB.recentes||HIST.carregando) return; HIST.carregando=true;
+  try{ HIST.itens=await DB.recentes(300); HIST.carregadoEm=Date.now(); }catch(e){ toast("Não consegui carregar o histórico ("+((e&&e.code)||"erro")+")"); }
+  HIST.carregando=false; if(st.modo==="hist") renderHist(); }
+function renderHist(){
+  if(st.telaAcesso){ $("#app").innerHTML=st.telaAcesso; return; }
+  if(!DB){ $("#app").innerHTML=`<div class="vazio">Histórico disponível só na versão compartilhada.</div>`; return; }
+  if(!HIST.carregadoEm){ $("#app").innerHTML=`<div class="vazio">Carregando histórico…</div>`; carregarHist(); return; }
+  const f=norm(HIST.filtro);
+  const lista=HIST.itens.filter(i=>!f || norm([i.forn,i.obra,i.desc,conta(i),String(i.valor)].join(" ")).includes(f));
+  const dias={}; lista.forEach(i=>{ const d=i.pagoEm?new Date(i.pagoEm).toLocaleDateString("pt-BR",{weekday:"short",day:"2-digit",month:"2-digit"}):"sem data"; (dias[d] ||= []).push(i); });
+  let h=`<div class="imp"><p>Pagamentos com baixa dada (últimos ${HIST.itens.length}). Busque por fornecedor, obra, conta ou valor.</p>
+    <input id="histBusca" placeholder="Buscar…" value="${esc(HIST.filtro)}" style="width:100%;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)"></div>`;
+  if(!lista.length) h+=`<div class="vazio">Nada encontrado.</div>`;
+  for(const [d,arr] of Object.entries(dias)){
+    h+=`<section class="conta"><div class="conta-h"><h2>${esc(d)}</h2><div class="tot"><b>${brl(arr.reduce((a,b)=>a+(+b.valor||0),0))}</b>${arr.length} ${arr.length>1?'pagamentos':'pagamento'}</div></div>`;
+    for(const i of arr){ const hp=i.pagoEm?new Date(i.pagoEm).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"";
+      h+=`<div class="pg"><div class="linha1"><span class="forn">${esc(i.forn)}</span><span class="valor">${brl(+i.valor||0)}</span></div>
+        <div class="meta">${['Obra '+esc(i.obra), esc(i.desc), esc(conta(i))].filter(Boolean).join(' · ')}</div>
+        <div class="meta">Pago${i.pagoPor?' por '+esc(nome(i.pagoPor)):''}${hp?' às '+hp:''} · baixa ${i.baixaPor==="export"?"detectada no export":(i.baixaPor?'por '+esc(nome(i.baixaPor)):'')}${i.baixaEm?' em '+new Date(i.baixaEm).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}):''}</div></div>`; }
+    h+=`</section>`; }
+  $("#app").innerHTML=h;
+  const b=document.getElementById("histBusca"); if(b && HIST._foco){ b.focus(); b.setSelectionRange(b.value.length,b.value.length); }
+}
 function renderIago(){
   if(st.telaAcesso){ $("#app").innerHTML=st.telaAcesso; $("#rodInfo").innerHTML=""; return; }
   if(st.carregando){ $("#app").innerHTML=carregandoHTML(); $("#rodInfo").innerHTML=""; return; }
@@ -357,7 +387,7 @@ function renderIago(){
       h += `<div class="pg ${it.pago?'pago':''}">
         <div class="linha1"><span class="forn">${esc(it.forn)}</span><span class="valor">${brl(it.valor)}</span></div>
         <div class="meta">${['Obra '+esc(it.obra), esc(it.desc), vencTxt(it)].filter(Boolean).join(' · ')}</div>
-        ${!pronto(it)?'<div class="aviso">Sem chave ou código de pagamento. Confirme com a Emily antes de pagar.</div>':''}
+        ${!pronto(it)?'<div class="aviso">Sem chave ou código de pagamento. Confirme com a Emily antes de pagar.</div>':''}${alertaHist(it,true)}
         ${it.tipo==="Boleto"
           ? `${alertaCC(it)}<div class="copiar"><div class="val">Boleto${it.venc?' · vence '+esc(it.venc):''}<br>${esc(chave(it))}</div><button class="btn pri" data-cp="${it.id}" data-q="chave">Copiar código</button></div>`
           : `${it.chaveAvulsa?`<div class="meta" style="color:var(--ouro);font-weight:600;margin-top:6px">Chave diferente do cadastro · ${esc(tipoChave(it.chaveAvulsa))} · confirmada pela Emily</div>`:''}${alertaCC(it)}<div class="copiar"><div class="val">${esc(fav(it))}${it.cpf&&!it.pixLanc&&!it.chaveAvulsa?' · '+esc(it.cpf):''}<br><b style="word-break:break-all">${esc(chave(it))}</b>${tipoChave(chave(it))&&!/copia/.test(tipoChave(chave(it)))?`<br><span style="font-size:12px;color:var(--muted)">${esc(tipoChave(chave(it)))}</span>`:''}</div><button class="btn pri" data-cp="${it.id}" data-q="chave">${tipoChave(chave(it))==="Pix copia e cola"?"Copiar Pix copia e cola":"Copiar chave"}</button></div>`}
@@ -374,7 +404,9 @@ function renderIago(){
 
 function atualizarSelo(){ const el=document.getElementById("selo"); if(!el) return;
   el.textContent = st.telaAcesso ? "Acesso restrito" : st.carregando ? "Conectando…" : (st.arquivo ? `Lote importado às ${st.importadoEm}${st.shared?" · compartilhado":""}` : "Nenhum lote importado"); }
-function render(){ salvar(); atualizarSelo(); document.getElementById("rodape").style.display = st.telaAcesso ? "none" : ""; st.modo==="emily"?renderEmily():renderIago(); $("#btnLote").textContent = st.modo==="emily"?"Gerar mensagem do lote":"Ver mensagem do lote"; }
+function render(){ salvar(); atualizarSelo(); document.getElementById("rodape").style.display = (st.telaAcesso||st.modo==="hist") ? "none" : "";
+  if(st.modo==="hist"){ renderHist(); return; }
+  st.modo==="emily"?renderEmily():renderIago(); $("#btnLote").textContent = st.modo==="emily"?"Gerar mensagem do lote":"Ver mensagem do lote"; }
 
 function mensagem(){
   const lote = ordenar(st.itens.filter(i=>i.status==="conferido"));
@@ -386,7 +418,7 @@ function mensagem(){
     m += `\n🏦 *${c.toUpperCase()}* (${brl(arr.reduce((a,b)=>a+b.valor,0))})\n`;
     arr.forEach(i=>{
       m += `\n${legenda(i)}\n`;
-      m += i.tipo==="Boleto" ? `Boleto${i.venc?' vence '+i.venc:''}: ${chave(i)}\n` + (duplicado(i)?"⚠ Conferir antes de pagar: mesmo código em outro pagamento\n":"") : `Pix ${fav(i)}${i.chaveAvulsa?" (⚠ chave diferente do cadastro, confirmada)":""}: ${chave(i)}\n` + (alertaCC(i).includes("⚠")?"⚠ Conferir antes de pagar: código com valor, recebedor ou duplicidade divergente\n":"");
+      m += i.tipo==="Boleto" ? `Boleto${i.venc?' vence '+i.venc:''}: ${chave(i)}\n` + (duplicado(i)?"⚠ Conferir antes de pagar: mesmo código em outro pagamento\n":"") : `Pix ${fav(i)}${i.chaveAvulsa?" (⚠ chave diferente do cadastro, confirmada)":""}: ${chave(i)}\n` + (alertaCC(i).includes("⚠")?"⚠ Conferir antes de pagar: código com valor, recebedor ou duplicidade divergente\n":"") + (i.jaPago&&i.jaPago.exato?"⚠ Este lançamento já consta como pago no histórico: confirmar antes de pagar\n":"");
     });
   }
   return m;
@@ -558,10 +590,15 @@ async function sincronizarImport(itens, arquivo, hora, pulados, unif){
     for(const it of itens){
       const ref=DB.doc("pagamentos/"+it.id);
       if(atuais[it.id]){ const dados={}; DATA_KEYS.forEach(k=>{ dados[k]=it[k]??""; }); await ref.update(limpo(dados)); }
-      else { const {editando, ...resto}=it; await ref.set(limpo(resto)); }
+      else { const {editando, ...resto}=it;
+        if(DB.jaPago){ try{ const jp=await DB.jaPago(it); if(jp) resto.jaPago={em:jp.pagoEm||0, por:jp.pagoPor||"", valor:+jp.valor||0, desc:jp.desc||"", obra:jp.obra||"", exato:!!jp.exato}; }catch(e){} }
+        await ref.set(limpo(resto)); }
       feitos++;
     }
-    for(const id of remover){ await DB.doc("pagamentos/"+id).delete(); feitos++; }
+    for(const id of remover){ const o=atuais[id];
+      if(o && o.pago && DB.arquivar) await DB.arquivar(o,{baixaEm:Date.now(), baixaPor:"export"});
+      else await DB.doc("pagamentos/"+id).delete();
+      feitos++; }
     await DB.doc("config/lote").set({arquivo, importadoEm:hora, por:MEU_ID||""});
     toast(`${itens.length} em aberto sincronizados${unif?` · ${unif} divididos por etapa unificados`:""}${remover.length?` · ${remover.length} baixados saíram do lote`:""}${pulados?` · ${pulados} já pagos ignorados`:""}`);
   }catch(e){ toast(`Importação parou em ${feitos} de ${total} (${(e&&e.code)||"erro"}). Importe de novo.`); }
@@ -576,7 +613,15 @@ async function resolverNomes(){
 }
 function nome(id){ if(!id) return ""; if(id===MEU_ID) return "você"; return NOMES[id]||USUARIOS[id]||"alguém da equipe"; }
 let AUTH=null;
+function dupKey(it){ return [norm(it.forn), (+it.valor).toFixed(2), norm(it.obra)].join("|"); }
 function adaptar(fs){ return {
+  arquivar: async (it, extra)=>{ const {editando, ...d}=it; await fs.doc("historico/"+it.id).set(limpo({...d, ...extra, dupKey:dupKey(it)})); await fs.doc("pagamentos/"+it.id).delete(); },
+  jaPago: async (it)=>{ const ex=await fs.doc("historico/"+it.id).get(); if(ex.exists) return {...ex.data(), exato:true};
+    const q=await fs.collection("historico").where("dupKey","==",dupKey(it)).limit(10).get();
+    const lim=Date.now()-45*864e5;
+    const hits=q.docs.map(d=>d.data()).filter(d=>(d.pagoEm||0)>=lim).sort((a,b)=>(b.pagoEm||0)-(a.pagoEm||0));
+    return hits[0]||null; },
+  recentes: async (n)=> (await fs.collection("historico").orderBy("pagoEm","desc").limit(n).get()).docs.map(d=>({...d.data(), id:d.id})),
   collection:(p)=>({ onSnapshot:(next,err)=>fs.collection(p).onSnapshot(qs=>next({docs:qs.docs.map(d=>({id:d.id, exists:true, data:()=>d.data()}))}), err) }),
   doc:(p)=>{ const r=fs.doc(p); return {
     set:(d)=>r.set(d), update:(d)=>r.update(d), delete:()=>r.delete(),
@@ -623,15 +668,18 @@ try{ const m=localStorage.getItem("is-lote-modo"); if(m==="iago"||m==="emily"){ 
 // ---------- eventos ----------
 let horaSync = new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
 $("#hoje").textContent = "IS Engenharia · " + new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"});
-function setModo(m){ st.modo=m; try{ localStorage.setItem("is-lote-modo",m); }catch(e){} $("#mEmily").setAttribute("aria-pressed",m==="emily"); $("#mIago").setAttribute("aria-pressed",m==="iago"); render(); window.scrollTo(0,0); }
+function setModo(m){ st.modo=m; try{ if(m!=="hist") localStorage.setItem("is-lote-modo",m); }catch(e){} $("#mEmily").setAttribute("aria-pressed",m==="emily"); $("#mIago").setAttribute("aria-pressed",m==="iago"); $("#mHist").setAttribute("aria-pressed",m==="hist"); if(m==="hist") HIST.carregadoEm=0; render(); window.scrollTo(0,0); }
 $("#mEmily").onclick=()=>setModo("emily");
 $("#mIago").onclick=()=>setModo("iago");
+$("#mHist").onclick=()=>setModo("hist");
 function setJ(j){ st.janela=j; $("#j12").setAttribute("aria-pressed",j==="12h"); $("#j18").setAttribute("aria-pressed",j==="18h"); render(); }
 $("#j12").onclick=()=>setJ("12h"); $("#j18").onclick=()=>setJ("18h");
 
 document.addEventListener("click", e=>{
   const t=e.target;
   if(t.id==="btnEntrar") entrar();
+  if(t.dataset && t.dataset.baixa && DB){ const it=st.itens.find(i=>i.id==t.dataset.baixa); if(it){ t.disabled=true;
+      DB.arquivar(it,{baixaEm:Date.now(), baixaPor:MEU_ID||""}).then(()=>toast("Baixa registrada · foi para o histórico")).catch(e=>{ t.disabled=false; toast("Não foi salvo ("+((e&&e.code)||"erro")+")"); }); } }
   if(t.id==="btnSair"||t.id==="btnSair2"){ e.preventDefault(); sair(); }
   if(t.id==="voltaDemo"){ try{localStorage.removeItem(CHAVE_LS);}catch(e){} location.reload(); }
   if(t.id==="mpOk"){ t.disabled=true; Promise.resolve(aplicarImport()).finally(()=>{ t.disabled=false; }); }
@@ -657,6 +705,7 @@ document.addEventListener("change", e=>{
 });
 document.addEventListener("input", e=>{
   const t=e.target;
+  if(t.id==="histBusca"){ HIST.filtro=t.value; HIST._foco=true; renderHist(); HIST._foco=false; return; }
   if(t.dataset.avulsa){ const it=st.itens.find(i=>i.id==t.dataset.avulsa); it.chaveAvulsa=t.value.trim(); it.confirmada=false;
     const cb=document.querySelector(`[data-confirma="${it.id}"]`); if(cb) cb.checked=false;
     const tp=document.querySelector(`[data-tipo="${it.id}"]`); if(tp) tp.textContent=tipoChave(it.chaveAvulsa); }
