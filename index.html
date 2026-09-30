@@ -222,9 +222,10 @@ for(const k in OBRA_CONTA) delete OBRA_CONTA[k]; FORNECEDORES={}; indexarForn();
 const $ = s => document.querySelector(s);
 const brl = v => v.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 function conta(it){ return it.contaManual || it.contaMC || OBRA_CONTA[it.obra] || ""; }
-function chave(it){ if(it.tipo==="Boleto") return it.linha||it.linhaManual||""; return it.chaveAvulsa || it.pixLanc || it.chaveManual || fornCad(it).chave || ""; }
+function chave(it){ if(it.tipo==="Boleto") return soDigitos(it.linha||it.linhaManual||""); return it.chaveAvulsa || it.pixLanc || it.chaveManual || fornCad(it).chave || ""; }
 function fav(it){ return it.favManual || it.favLanc || fornCad(it).fav || (chave(it)?it.forn:""); }
-function pronto(it){ if(it.chaveAvulsa && !it.confirmada) return false; return conta(it) && chave(it) && (it.tipo==="Boleto" || fav(it)); }
+function ccInvalido(it){ const k=chave(it); return it.tipo!=="Boleto" && /^000201/.test(k) && !ccValido(k); }
+function pronto(it){ if(it.chaveAvulsa && !it.confirmada) return false; if(ccInvalido(it)) return false; if(boletoInvalido(it)) return false; return conta(it) && chave(it) && (it.tipo==="Boleto" || fav(it)); }
 function duplicado(it){ const k=chave(it); if(!k || !(it.tipo==="Boleto" || /^000201/.test(k))) return null;
   return st.itens.find(o=>o!==it && o.status!=="recusado" && chave(o)===k) || null; }
 function alertaHist(it, paraIago){ const j=it.jaPago; if(!j) return "";
@@ -233,6 +234,8 @@ function alertaHist(it, paraIago){ const j=it.jaPago; if(!j) return "";
   if(j.exato) return `<div class="aviso" style="margin-top:8px">⚠ Este mesmo lançamento já foi pago ${quando?"em "+quando:""}${j.por?" por "+esc(nome(j.por)):""} · ${brl(j.valor)}. Verifique se a baixa foi dada no Mais Controle.</div>`;
   return `<div class="meta" style="margin-top:8px;color:var(--ouro);font-weight:600">Double check: pagamento parecido (mesmo fornecedor, valor e obra) pago ${quando?"em "+quando:""}${j.desc?" · "+esc(j.desc):""}. Se for uma nova medição, é só conferir normalmente.</div>`; }
 function alertaCC(it){ const k=chave(it); const d=duplicado(it);
+  if(boletoInvalido(it)) return `<div class="aviso" style="margin-top:6px">⚠ Linha digitável inválida (dígito verificador não confere, ${soDigitos(k).length} dígitos). Copie de novo do boleto e cole no Número documento.</div>`;
+  if(ccInvalido(it)) return `<div class="aviso" style="margin-top:6px">⚠ Código Pix copia e cola inválido (dígito verificador não confere). Copie de novo do boleto, de preferência pelo botão "copiar" do app/site do emissor, e cole no Número documento.</div>`;
   const dup = d ? `⚠ Mesmo código usado em outro pagamento: ${d.forn} · ${brl(d.valor)} · ${d.obra}` : "";
   if(it.tipo==="Boleto"||!/^000201/.test(k)) return dup?`<div class="meta" style="color:var(--alerta);font-weight:600;margin-top:6px">${esc(dup)}</div>`:"";
   const e=emv(k)||{}; let a=dup?[dup]:[];
@@ -310,7 +313,7 @@ function renderEmily(){
         </div>
         ${it.tipo==="Boleto" ? `
         <div class="campo"><label>Boleto${it.venc?' · vence '+esc(it.venc):''} ${it.linha?'<span class="auto">código da Descrição (COD:)</span>':''}</label>
-          ${it.linha ? `<div class="val">${esc(k)}</div>${alertaCC(it)}` : `<input placeholder="Colar linha digitável do boleto" data-linha="${it.id}" value="${esc(it.linhaManual)}">`}</div>` : `
+          ${it.linha ? `<div class="val">${esc(k)}</div>${alertaCC(it)}` : `<input placeholder="Colar linha digitável do boleto" data-linha="${it.id}" value="${esc(it.linhaManual)}">${it.linhaManual?alertaCC(it):''}`}</div>` : `
         <div class="campo"><label>Favorecido e chave Pix ${it.chaveAvulsa?'<span class="auto" style="color:var(--ouro)">chave informada só para este pagamento</span>':it.pixLanc?'<span class="auto">chave informada no lançamento</span>':fornCad(it).chave?'<span class="auto">do cadastro do fornecedor no Mais Controle</span>':''}</label>
           ${it.editando ? `
             <input placeholder="Chave aleatória, CPF, CNPJ, e-mail, telefone ou Pix copia e cola" data-avulsa="${it.id}" value="${esc(it.chaveAvulsa)}">
@@ -324,7 +327,7 @@ function renderEmily(){
              <input style="margin-top:6px" placeholder="Chave Pix" data-chave="${it.id}" value="${esc(it.chaveManual)}">`}
         </div>`}
       </div>
-      ${!ok && it.status==="aberto" ? `<div class="aviso">${it.chaveAvulsa&&!it.confirmada?'Chave diferente do cadastro: confirme com o fornecedor antes de liberar. ':''}${!c?'Obra sem conta pagadora cadastrada. ':''}${!k?(it.tipo==="Boleto"?'Boleto sem código (usar | COD: na Descrição). ':'Fornecedor sem chave Pix no cadastro. '):''}Complete para liberar.</div>`:''}
+      ${!ok && it.status==="aberto" && !ccInvalido(it) && !boletoInvalido(it) ? `<div class="aviso">${it.chaveAvulsa&&!it.confirmada?'Chave diferente do cadastro: confirme com o fornecedor antes de liberar. ':''}${!c?'Obra sem conta pagadora cadastrada. ':''}${!k?(it.tipo==="Boleto"?'Boleto sem código (usar | COD: na Descrição). ':'Fornecedor sem chave Pix no cadastro. '):''}Complete para liberar.</div>`:''}
       <div class="acoes">
         ${it.status==="aberto" ? `
           <button class="btn pri" data-conf="${it.id}" ${ok?'':'disabled'}>Conferido, incluir no lote</button>
@@ -481,7 +484,61 @@ function emv(code){ const c=String(code||"").replace(/\r?\n/g,"").trim(); if(!/^
   const ma=tags["26"]||"", sub={}; let j=0; while(j+4<=ma.length){ const t=ma.substr(j,2), l=parseInt(ma.substr(j+2,2),10); if(isNaN(l)) break; sub[t]=ma.substr(j+4,l); j+=4+l; }
   out.dinamico=!!sub["25"]; out.chave=sub["01"]||"";
   return out; }
-function achaCopiaCola(t){ const m=String(t||"").replace(/\r?\n/g,"").match(/000201.+?6304[0-9A-F]{4}/i); return m?m[0]:""; }
+// ---------- BOLETO: limpa (só dígitos) e valida dígitos verificadores ----------
+function soDigitos(x){ return String(x||"").replace(/\D/g,""); }
+function mod10(n){ let s=0, p=2; for(let i=n.length-1;i>=0;i--){ let v=+n[i]*p; s+= v>9 ? Math.floor(v/10)+v%10 : v; p=p===2?1:2; } return (10-s%10)%10; }
+function mod11(n, pesoMax=9){ let s=0, p=2; for(let i=n.length-1;i>=0;i--){ s+=+n[i]*p; p=p===pesoMax?2:p+1; } return s%11; }
+function dvBancario(n){ const r=11-mod11(n); return (r===0||r===10||r===11)?1:r; }
+function dvArrecOk(n, dv){ const r=mod11(n); const a=(r===0||r===1)?0:(r===10?1:11-r); const b=(11-r)>=10?0:11-r; return +dv===a || +dv===b; }
+function boletoValido(raw){ const d=soDigitos(raw);
+  if(d.length===47){ // linha digitável bancária
+    if(mod10(d.slice(0,9))!==+d[9] || mod10(d.slice(10,20))!==+d[20] || mod10(d.slice(21,31))!==+d[31]) return false;
+    const bar=d.slice(0,4)+d[32]+d.slice(33,47)+d.slice(4,9)+d.slice(10,20)+d.slice(21,31);
+    return dvBancario(bar.slice(0,4)+bar.slice(5))===+bar[4]; }
+  if(d.length===48){ // arrecadação / convênio (energia, água, tributos)
+    const usa10 = d[2]==="6"||d[2]==="7";
+    for(let b=0;b<4;b++){ const bloco=d.slice(b*12,b*12+11), dv=d[b*12+11];
+      if(usa10 ? mod10(bloco)!==+dv : !dvArrecOk(bloco,dv)) return false; }
+    return true; }
+  if(d.length===44){ // código de barras
+    if(d[0]==="8"){ const semDv=d.slice(0,3)+d.slice(4); return (d[2]==="6"||d[2]==="7") ? mod10(semDv)===+d[3] : dvArrecOk(semDv,d[3]); }
+    return dvBancario(d.slice(0,4)+d.slice(5))===+d[4]; }
+  return false; }
+// acha a linha digitável dentro de um texto maior (ex.: "104-0 10496.52264 ..." ou linha repetida)
+function extrairLinha(txt){ const t=String(txt||"");
+  const pads=[ /\d{5}\.?\d{5}\s*\d{5}\.?\d{6}\s*\d{5}\.?\d{6}\s*\d\s*\d{14}/g,   // bancário 47
+               /(?:\d{11}[\s-]?\d[\s.]*){4}/g ];                                    // arrecadação 48
+  for(const re of pads){ for(const m of t.match(re)||[]){ const d=soDigitos(m); if((d.length===47||d.length===48) && boletoValido(d)) return d; } }
+  const d=soDigitos(t); if(d.length>=44 && d.length<=48) return d;
+  // procura qualquer janela de 47/48/44 dígitos válida
+  for(const n of [47,48,44]) for(let i=0;i+n<=d.length;i++){ const w=d.slice(i,i+n); if(boletoValido(w)) return w; }
+  return ""; }
+function boletoInvalido(it){ if(it.tipo!=="Boleto") return false; const k=chave(it); return !!k && !boletoValido(k); }
+function crc16(str){ const b=new TextEncoder().encode(str); let c=0xFFFF;
+  for(const x of b){ c^=x<<8; for(let i=0;i<8;i++) c=(c&0x8000)?((c<<1)^0x1021)&0xFFFF:(c<<1)&0xFFFF; }
+  return c.toString(16).toUpperCase().padStart(4,"0"); }
+function ccValido(c){ return /^000201/.test(c) && c.length>12 && c.slice(-8,-4)==="6304" && crc16(c.slice(0,-4))===c.slice(-4).toUpperCase(); }
+function arrumaUUID(c){ const m=/(cobv?\/)([0-9a-f\- ]{32,44})/i.exec(c); if(!m) return c;
+  const seg=m[2]; let n=0, fim=0; for(let i=0;i<seg.length;i++){ if(/[0-9a-f]/i.test(seg[i])) n++; if(n===32){ fim=i+1; break; } }
+  if(!fim) return c; const h=seg.slice(0,fim).replace(/[^0-9a-f]/gi,"");
+  const u=`${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
+  return c.slice(0,m.index+m[1].length)+u+seg.slice(fim)+c.slice(m.index+m[0].length); }
+// conserta código copiado de PDF (espaços e hífens perdidos na quebra de linha), validando pelo CRC
+function repararCC(cru){ const c=String(cru||"").replace(/\r?\n/g,"").trim(); if(ccValido(c)) return {codigo:c, ok:true, reparado:false};
+  for(const base of [c, arrumaUUID(c)]){
+    const esp=[]; for(let i=0;i<base.length;i++) if(base[i]===" ") esp.push(i);
+    if(esp.length>10) continue;
+    const n=esp.length;
+    for(let k=0;k<=n;k++){ // remove k espaços, testando combinações
+      const comb=(ini,esc)=>{ if(esc.length===k){ const rem=new Set(esc); const t=[...base].filter((ch,i)=>!rem.has(i)).join(""); return ccValido(t)?t:null; }
+        for(let j=ini;j<n;j++){ const r=comb(j+1,[...esc,esp[j]]); if(r) return r; } return null; };
+      const r=comb(0,[]); if(r) return {codigo:r, ok:true, reparado:true};
+    } }
+  return {codigo:c, ok:false, reparado:false}; }
+function achaCopiaCola(t){ const s0=String(t||"").replace(/\r?\n/g,""); const i=s0.search(/000201/); if(i<0) return "";
+  const resto=s0.slice(i); const re=/6304[0-9A-F]{4}/gi; let m, ultimo="";
+  while((m=re.exec(resto))){ const cand=resto.slice(0,m.index+8); const r=repararCC(cand); if(r.ok) return r.codigo; ultimo=cand; }
+  return ultimo; }
 function chaveValida(k){ const t=tipoChave(k); return !!t && !t.startsWith("⚠"); }
 
 function abrirMapa(tipo, file, rows){
@@ -521,15 +578,16 @@ async function aplicarImport(){
     if(valor===0){ pulados++; continue; }
     const dsc=String(g(r,"desc")), com=String(g(r,"coment")), nd=String(g(r,"ndoc")).trim();
     const digitos=nd.replace(/\D/g,"");
-    const cod=(com.match(/COD:\s*([^|\n]+)/i)||dsc.match(/COD:\s*([^|\n]+)/i)||[])[1] || (digitos.length>=44&&digitos.length<=48?nd:"");
+    const codTxt=(com.match(/COD:\s*([^|\n]+)/i)||dsc.match(/COD:\s*([^|\n]+)/i)||[])[1];
+    const cod = codTxt ? (extrairLinha(codTxt)||soDigitos(codTxt)) : (!/^000201/.test(nd.trim()) && digitos.length>=44 ? extrairLinha(nd) : "");
     let px=lerPix(com); if(!px.chave) px=lerPix(dsc);
     if(!px.chave && nd && !cod){ const p2=lerPix(nd); if(p2.chave) px=p2; else if(chaveValida(nd)) px={chave:nd,fav:""}; }
     if(!px.chave && com.trim() && chaveValida(com.trim())) px={chave:com.trim(),fav:""};
     const bancoF=String(g(r,"banco")).trim(); let pxF=lerPix(bancoF); if(!pxF.chave && chaveValida(bancoF)) pxF={chave:bancoF,fav:""};
     if(pxF.chave && !chaveValida(pxF.chave)) pxF={chave:"",fav:""};
 
-    const tipo=(cod || /boleto/.test(norm(g(r,"forma")))) ? "Boleto" : "Pix";
-    const usouND = !!nd && ((cod && cod===nd) || px.chave===nd || (achaCopiaCola(nd) && px.chave===achaCopiaCola(nd)));
+    const tipo = cod ? "Boleto" : (px.chave ? "Pix" : (/boleto/.test(norm(g(r,"forma"))) ? "Boleto" : "Pix"));
+    const usouND = !!nd && ((cod && soDigitos(nd).includes(cod)) || px.chave===nd || (achaCopiaCola(nd) && px.chave===achaCopiaCola(nd)));
     const nf = nd && !usouND ? nd : "";
     const oc=String(g(r,"oc")).trim(), pc=String(g(r,"parc")).trim(), et=String(g(r,"etapa")).trim(), cpf=String(g(r,"doc")).trim();
     const v=lerData(g(r,"venc"));
@@ -709,7 +767,7 @@ document.addEventListener("input", e=>{
   if(t.dataset.avulsa){ const it=st.itens.find(i=>i.id==t.dataset.avulsa); it.chaveAvulsa=t.value.trim(); it.confirmada=false;
     const cb=document.querySelector(`[data-confirma="${it.id}"]`); if(cb) cb.checked=false;
     const tp=document.querySelector(`[data-tipo="${it.id}"]`); if(tp) tp.textContent=tipoChave(it.chaveAvulsa); }
-  if(t.dataset.linha){ const it=st.itens.find(i=>i.id==t.dataset.linha); it.linhaManual=t.value.trim();
+  if(t.dataset.linha){ const it=st.itens.find(i=>i.id==t.dataset.linha); it.linhaManual=extrairLinha(t.value)||t.value.trim();
     const b=t.closest(".item").querySelector("[data-conf]"); if(b) b.disabled=!pronto(it); }
   if(t.dataset.chave||t.dataset.fav){
     const it=st.itens.find(i=>i.id==(t.dataset.chave||t.dataset.fav));
