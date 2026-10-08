@@ -89,6 +89,11 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .conta-h .tot{text-align:right;font-size:12px;opacity:.85}
 .conta-h .tot b{display:block;font-family:var(--cond);font-size:20px;opacity:1}
 .conta.feita .conta-h{background:var(--muted)}
+.linha1.esq{justify-content:flex-start}
+.linha1.esq .valor{min-width:0}
+.conta-h.esq{justify-content:flex-start}
+.conta-h.esq .tot{text-align:left;order:-1;min-width:112px}
+.etapa{display:inline-block;margin-top:4px;padding:2px 8px;border-radius:6px;background:rgba(201,169,97,.18);color:var(--ouro);font-size:12px;font-weight:700;letter-spacing:.3px;text-transform:uppercase}
 .pg{padding:12px 14px;border-top:1px solid var(--line)}
 .pg:first-of-type{border-top:0}
 .pg.pago{opacity:.5}
@@ -237,7 +242,11 @@ function alertaCC(it){ const k=chave(it); const d=duplicado(it);
   if(boletoInvalido(it)) return `<div class="aviso" style="margin-top:6px">⚠ Linha digitável inválida (dígito verificador não confere, ${soDigitos(k).length} dígitos). Copie de novo do boleto e cole no Número documento.</div>`;
   if(ccInvalido(it)) return `<div class="aviso" style="margin-top:6px">⚠ Código Pix copia e cola inválido (dígito verificador não confere). Copie de novo do boleto, de preferência pelo botão "copiar" do app/site do emissor, e cole no Número documento.</div>`;
   const dup = d ? `⚠ Mesmo código usado em outro pagamento: ${d.forn} · ${brl(d.valor)} · ${d.obra}` : "";
-  if(it.tipo==="Boleto"||!/^000201/.test(k)) return dup?`<div class="meta" style="color:var(--alerta);font-weight:600;margin-top:6px">${esc(dup)}</div>`:"";
+  if(it.tipo==="Boleto"){ const vb=boletoValorDif(it); const a=[]; if(vb!=null){ const dif=Math.round((vb-it.valor)*100)/100;
+      if(dif>0 && dif<vb) a.push(`DESCONTO de ${brl(dif)}: boleto de ${brl(vb)}, pagar ${brl(it.valor)}. Confira se o app do banco já mostra ${brl(it.valor)}; se mostrar ${brl(vb)}, ajuste o valor ou fale com a Emily.`);
+      else a.push(`⚠ Valor dentro do boleto: ${brl(vb)} (lançamento: ${brl(it.valor)}). Conferir juros/multa ou se o código é de outro boleto.`); } if(dup) a.push(dup);
+    return a.map(x=>`<div class="meta" style="color:var(--alerta);font-weight:600;margin-top:6px">${esc(x)}</div>`).join(""); }
+  if(!/^000201/.test(k)) return dup?`<div class="meta" style="color:var(--alerta);font-weight:600;margin-top:6px">${esc(dup)}</div>`:"";
   const e=emv(k)||{}; let a=dup?[dup]:[];
   if(e.valor!=null && Math.abs(e.valor-it.valor)>0.009) a.push(`⚠ Valor dentro do código: ${brl(e.valor)} (lançamento: ${brl(it.valor)})`);
   if(e.dinamico) a.push("Código dinâmico: pode expirar, pagar no mesmo dia");
@@ -385,10 +394,11 @@ function renderIago(){
     const feita = arr.every(i=>i.pago);
     const tot = arr.reduce((a,b)=>a+b.valor,0);
     h += `<section class="conta ${feita?'feita':''}">
-      <div class="conta-h"><h2>${esc(c)}</h2><div class="tot"><b>${brl(tot)}</b>${arr.length} ${arr.length>1?'pagamentos':'pagamento'} · abra o app 1 vez</div></div>`;
+      <div class="conta-h esq"><div class="tot"><b>${brl(tot)}</b>${arr.length} ${arr.length>1?'pagtos':'pagto'}</div><h2>${esc(c)}</h2></div>`;
     for(const it of arr){
       h += `<div class="pg ${it.pago?'pago':''}">
-        <div class="linha1"><span class="forn">${esc(it.forn)}</span><span class="valor">${brl(it.valor)}</span></div>
+        <div class="linha1 esq"><span class="valor">${brl(it.valor)}</span><span class="forn">${esc(it.forn)}</span></div>
+        ${it.etapa?`<div class="etapa">${esc(it.etapa)}</div>`:''}
         <div class="meta">${['Obra '+esc(it.obra), esc(it.desc), vencTxt(it)].filter(Boolean).join(' · ')}</div>
         ${!pronto(it)?'<div class="aviso">Sem chave ou código de pagamento. Confirme com a Emily antes de pagar.</div>':''}${alertaHist(it,true)}
         ${it.tipo==="Boleto"
@@ -420,8 +430,8 @@ function mensagem(){
   for(const [c,arr] of Object.entries(g)){
     m += `\n🏦 *${c.toUpperCase()}* (${brl(arr.reduce((a,b)=>a+b.valor,0))})\n`;
     arr.forEach(i=>{
-      m += `\n${legenda(i)}\n`;
-      m += i.tipo==="Boleto" ? `Boleto${i.venc?' vence '+i.venc:''}: ${chave(i)}\n` + (duplicado(i)?"⚠ Conferir antes de pagar: mesmo código em outro pagamento\n":"") : `Pix ${fav(i)}${i.chaveAvulsa?" (⚠ chave diferente do cadastro, confirmada)":""}: ${chave(i)}\n` + (alertaCC(i).includes("⚠")?"⚠ Conferir antes de pagar: código com valor, recebedor ou duplicidade divergente\n":"") + (i.jaPago&&i.jaPago.exato?"⚠ Este lançamento já consta como pago no histórico: confirmar antes de pagar\n":"");
+      m += `\n${legenda(i)}\n` + (i.etapa?`Etapa: ${i.etapa}\n`:"");
+      m += i.tipo==="Boleto" ? `Boleto${i.venc?' vence '+i.venc:''}: ${chave(i)}\n` + (duplicado(i)?"⚠ Conferir antes de pagar: mesmo código em outro pagamento\n":"") + (boletoValorDif(i)!=null?(boletoValorDif(i)>i.valor?`💲 Desconto: boleto ${brl(boletoValorDif(i))}, pagar ${brl(i.valor)} (conferir no app)\n`:`⚠ Valor no boleto ${brl(boletoValorDif(i))} diferente do lançamento\n`):"") : `Pix ${fav(i)}${i.chaveAvulsa?" (⚠ chave diferente do cadastro, confirmada)":""}: ${chave(i)}\n` + (alertaCC(i).includes("⚠")?"⚠ Conferir antes de pagar: código com valor, recebedor ou duplicidade divergente\n":"") + (i.jaPago&&i.jaPago.exato?"⚠ Este lançamento já consta como pago no histórico: confirmar antes de pagar\n":"");
     });
   }
   return m;
@@ -511,8 +521,16 @@ function extrairLinha(txt){ const t=String(txt||"");
   for(const re of pads){ for(const m of t.match(re)||[]){ const d=soDigitos(m); if((d.length===47||d.length===48) && boletoValido(d)) return d; } }
   const d=soDigitos(t); if(d.length>=44 && d.length<=48) return d;
   // procura qualquer janela de 47/48/44 dígitos válida
-  for(const n of [47,48,44]) for(let i=0;i+n<=d.length;i++){ const w=d.slice(i,i+n); if(boletoValido(w)) return w; }
+  // 44 (código de barras) só é aceito se o texto inteiro tiver 44 dígitos (tratado acima), para não "achar" um código falso dentro de uma linha com erro
+  for(const n of [47,48]) for(let i=0;i+n<=d.length;i++){ const w=d.slice(i,i+n); if(boletoValido(w)) return w; }
   return ""; }
+// valor gravado dentro do código (null = boleto sem valor fixo)
+function valorBoleto(k){ const d=soDigitos(k); let v=null;
+  if(d.length===47) v=+d.slice(37,47);
+  else if(d.length===48){ if(d[2]==='6'||d[2]==='8'){ const bar=d.slice(0,11)+d.slice(12,23)+d.slice(24,35)+d.slice(36,47); v=+bar.slice(4,15); } }
+  else if(d.length===44){ if(d[0]==='8'){ if(d[2]==='6'||d[2]==='8') v=+d.slice(4,15); } else v=+d.slice(9,19); }
+  return v ? v/100 : null; }
+function boletoValorDif(it){ if(it.tipo!=='Boleto') return null; const k=chave(it); if(!k||!boletoValido(k)) return null; const v=valorBoleto(k); return (v!=null && Math.abs(v-(+it.valor))>0.009) ? v : null; }
 function boletoInvalido(it){ if(it.tipo!=="Boleto") return false; const k=chave(it); return !!k && !boletoValido(k); }
 function crc16(str){ const b=new TextEncoder().encode(str); let c=0xFFFF;
   for(const x of b){ c^=x<<8; for(let i=0;i<8;i++) c=(c&0x8000)?((c<<1)^0x1021)&0xFFFF:(c<<1)&0xFFFF; }
