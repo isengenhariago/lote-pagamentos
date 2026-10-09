@@ -90,7 +90,9 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .conta-h .tot b{display:block;font-family:var(--cond);font-size:20px;opacity:1}
 .conta.feita .conta-h{background:var(--muted)}
 .linha1.esq{justify-content:flex-start}
-.linha1.esq .valor{min-width:0}
+.linha1.esq .valor{flex:0 0 auto}
+.linha1.esq .forn{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
+.linha1.esq{align-items:flex-start}
 .conta-h.esq{justify-content:flex-start}
 .conta-h.esq .tot{text-align:left;order:-1;min-width:112px}
 .etapa{display:inline-block;margin-top:4px;padding:2px 8px;border-radius:6px;background:rgba(201,169,97,.18);color:var(--ouro);font-size:12px;font-weight:700;letter-spacing:.3px;text-transform:uppercase}
@@ -615,17 +617,22 @@ async function aplicarImport(){
       contaMC:String(g(r,"conta")).trim(), sol:"" }));
   }
   if(!itens.length){ toast("Nenhum pagamento em aberto encontrado. Confira as colunas."); return; }
-  const grupos=[], porChave={}; let unificados=0;
-  for(const it of itens){ const m=/^(\d+)[.,]\d+$/.exec(it.idx||"");
-    if(!m){ grupos.push(it); continue; }
-    const k=[m[1], norm(it.forn), it.contaMC, it.vencISO, it.tipo].join("|");
-    const g0=porChave[k];
-    if(!g0){ it.partes=[{etapa:it.etapa, valor:it.valor, obra:it.obra}]; porChave[k]=it; grupos.push(it); }
-    else { g0.valor=Math.round((g0.valor+it.valor)*100)/100; g0.partes.push({etapa:it.etapa, valor:it.valor, obra:it.obra});
-      if(!g0.linha && it.linha) g0.linha=it.linha; if(!g0.pixLanc && it.pixLanc) g0.pixLanc=it.pixLanc; }
-  }
+  // junta partes do mesmo pagamento (lançamento dividido por etapa no Mais Controle)
+  // 1º pelo Índice (12.1, 12.2...); 2º pelo mesmo favorecido + mesma chave/boleto + mesma conta + mesmo vencimento + mesma descrição
+  const juntar=(lista, chaveDe)=>{ const out=[], por={};
+    for(const it of lista){ const k=chaveDe(it); if(!k){ out.push(it); continue; }
+      const g0=por[k];
+      if(!g0){ it.partes ||= [{etapa:it.etapa, valor:it.valor, obra:it.obra}]; por[k]=it; out.push(it); }
+      else { g0.valor=Math.round((g0.valor+it.valor)*100)/100; g0.partes.push(...(it.partes||[{etapa:it.etapa, valor:it.valor, obra:it.obra}]));
+        if(!g0.linha && it.linha) g0.linha=it.linha; if(!g0.pixLanc && it.pixLanc) g0.pixLanc=it.pixLanc; if(!g0.oc && it.oc) g0.oc=it.oc; } }
+    return out; };
+  let grupos = juntar(itens, it=>{ const m=/^(\d+)[.,]\d+$/.exec(it.idx||""); return m ? [m[1], norm(it.forn), it.contaMC, it.vencISO, it.tipo].join("|") : ""; });
+  grupos = juntar(grupos, it=>{ const pag = it.tipo==="Boleto" ? soDigitos(it.linha) : (it.pixLanc || it.chaveCad || "");
+    return pag ? [norm(it.forn), it.contaMC, it.vencISO, it.tipo, pag, norm(it.desc)].join("|") : ""; });
+  let unificados=0;
   for(const g1 of grupos){ if(g1.partes && g1.partes.length>1){ unificados++;
-      g1.etapa=g1.partes.map(p=>`${p.etapa||"—"} ${Math.round(p.valor/g1.valor*100)}%`).join(" + ");
+      const porEt={}; g1.partes.forEach(p=>{ const e=p.etapa||"—"; porEt[e]=Math.round(((porEt[e]||0)+p.valor)*100)/100; });
+      g1.etapa=Object.entries(porEt).map(([e,v])=>`${e} ${brl(v)}`).join(" + ");
       const obras=[...new Set(g1.partes.map(p=>p.obra))]; if(obras.length>1) g1.obra=obras.join(" + "); }
     delete g1.partes; delete g1.idx; }
   itens=grupos;
