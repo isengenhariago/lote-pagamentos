@@ -95,6 +95,9 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .linha1.esq{align-items:flex-start}
 .conta-h.esq{justify-content:flex-start}
 .conta-h.esq .tot{text-align:left;order:-1;min-width:112px}
+.agrup{margin-top:8px;padding:8px 10px;border:1px dashed var(--ouro);border-radius:8px;background:rgba(201,169,97,.08);font-size:12px;line-height:1.5}
+.agrup b{color:var(--ouro);letter-spacing:.3px}
+.agrup .pt{display:flex;justify-content:space-between;gap:8px;border-top:1px solid rgba(201,169,97,.25);padding-top:3px;margin-top:3px}
 .etapa{display:inline-block;margin-top:4px;padding:2px 8px;border-radius:6px;background:rgba(201,169,97,.18);color:var(--ouro);font-size:12px;font-weight:700;letter-spacing:.3px;text-transform:uppercase}
 .pg{padding:12px 14px;border-top:1px solid var(--line)}
 .pg:first-of-type{border-top:0}
@@ -270,7 +273,14 @@ function tipoChave(k){ k=(k||"").trim();
     return cpf&&!cel?"CPF":cel&&!cpf?"Telefone (celular com DDD)":"CPF ou telefone"; }
   if(d.length===14) return "CNPJ";
   return "⚠ Formato não reconhecido – conferir"; }
-function legenda(it){ return `${it.oc?'#'+it.oc+' | ':''}Obra ${it.obra} | ${it.forn} | ${it.desc} | ${brl(it.valor)}`; }
+function agrupado(it){ return Array.isArray(it.composicao) && it.composicao.length>1; }
+function legenda(it){
+  if(!agrupado(it)) return `${it.oc?'#'+it.oc+' | ':''}Obra ${it.obra}${it.etapa?' | Etapa '+it.etapa:''} | ${it.forn} | ${it.desc} | ${brl(it.valor)}`;
+  const partes = it.composicao.map(p=>`${p.obra}${p.etapa?' / '+p.etapa:''} ${brl(p.valor)}`).join(' + ');
+  const idx = it.composicao.map(p=>p.idx?'#'+p.idx:'').filter(Boolean).join(' ');
+  return `PAGTO AGRUPADO (${it.composicao.length} lanç.${idx?' MC '+idx:''}) | ${it.forn} | ${it.desc} | ${partes} | Total ${brl(it.valor)}`; }
+function agrupHtml(it){ if(!agrupado(it)) return "";
+  return `<div class="agrup"><b>PAGAMENTO AGRUPADO · ${it.composicao.length} lançamentos · 1 Pix · mesma conta e mesma chave</b><br>Dar baixa em cada lançamento no Mais Controle com o mesmo comprovante:${it.composicao.map(p=>`<div class="pt"><span>${p.idx?'Índice '+esc(p.idx)+' · ':''}${esc(p.obra)}${p.etapa?' · '+esc(p.etapa):''}</span><span>${brl(p.valor)}</span></div>`).join('')}</div>`; }
 const _h=new Date(); const HOJE = `${_h.getFullYear()}-${String(_h.getMonth()+1).padStart(2,"0")}-${String(_h.getDate()).padStart(2,"0")}`;
 function vencTxt(it){ if(!it.venc) return ""; if(it.vencISO && it.vencISO<HOJE) return `<span class="venc-alerta">VENCIDO ${esc(it.venc)}</span>`; if(it.vencISO===HOJE) return `<span class="venc-alerta">vence HOJE</span>`; return "vence "+esc(it.venc); }
 function ordenar(a){ return [...a].sort((x,y)=> conta(x).localeCompare(conta(y)) || String(x.vencISO||"").localeCompare(String(y.vencISO||""))); }
@@ -316,7 +326,7 @@ function renderEmily(){
     const cls = it.status==="recusado"?"rec": it.status==="conferido"?"ok": ok?"":"pend";
     h += `<article class="item ${cls}">
       <div class="linha1"><span class="forn">${esc(it.forn)}</span><span class="valor">${brl(it.valor)}</span></div>
-      <div class="meta">${[esc(it.oc), it.nf?'Doc. '+esc(it.nf):'', 'Obra '+esc(it.obra), esc(it.desc), it.etapa?esc(it.etapa):'', vencTxt(it), it.sol?'pedido por '+esc(it.sol):''].filter(Boolean).join(' · ')}</div>${alertaHist(it)}
+      <div class="meta">${[esc(it.oc), it.nf?'Doc. '+esc(it.nf):'', 'Obra '+esc(it.obra), esc(it.desc), it.etapa?esc(it.etapa):'', vencTxt(it), it.sol?'pedido por '+esc(it.sol):''].filter(Boolean).join(' · ')}</div>${agrupHtml(it)}${alertaHist(it)}
       <div class="campos">
         <div class="campo"><label>Conta pagadora ${it.contaMC?'<span class="auto">do Mais Controle</span>':OBRA_CONTA[it.obra]?'<span class="auto">automático pela obra</span>':''}</label>
           ${c && !it.contaManual ? `<div class="val">${esc(c)}</div>` :
@@ -401,7 +411,7 @@ function renderIago(){
       h += `<div class="pg ${it.pago?'pago':''}">
         <div class="linha1 esq"><span class="valor">${brl(it.valor)}</span><span class="forn">${esc(it.forn)}</span></div>
         ${it.etapa?`<div class="etapa">${esc(it.etapa)}</div>`:''}
-        <div class="meta">${['Obra '+esc(it.obra), esc(it.desc), vencTxt(it)].filter(Boolean).join(' · ')}</div>
+        <div class="meta">${['Obra '+esc(it.obra), esc(it.desc), vencTxt(it)].filter(Boolean).join(' · ')}</div>${agrupHtml(it)}
         ${!pronto(it)?'<div class="aviso">Sem chave ou código de pagamento. Confirme com a Emily antes de pagar.</div>':''}${alertaHist(it,true)}
         ${it.tipo==="Boleto"
           ? `${alertaCC(it)}<div class="copiar"><div class="val">Boleto${it.venc?' · vence '+esc(it.venc):''}<br>${esc(chave(it))}</div><button class="btn pri" data-cp="${it.id}" data-q="chave">Copiar código</button></div>`
@@ -432,7 +442,7 @@ function mensagem(){
   for(const [c,arr] of Object.entries(g)){
     m += `\n🏦 *${c.toUpperCase()}* (${brl(arr.reduce((a,b)=>a+b.valor,0))})\n`;
     arr.forEach(i=>{
-      m += `\n${legenda(i)}\n` + (i.etapa?`Etapa: ${i.etapa}\n`:"");
+      m += `\n${legenda(i)}\n` + (agrupado(i) ? `🔗 Agrupado: 1 Pix para ${i.composicao.length} lançamentos (baixar cada um com o mesmo comprovante)\n` + i.composicao.map(p=>`   • ${p.idx?'#'+p.idx+' ':''}${p.obra}${p.etapa?' / '+p.etapa:''}: ${brl(p.valor)}`).join("\n") + "\n" : (i.etapa?`Etapa: ${i.etapa}\n`:""));
       m += i.tipo==="Boleto" ? `Boleto${i.venc?' vence '+i.venc:''}: ${chave(i)}\n` + (duplicado(i)?"⚠ Conferir antes de pagar: mesmo código em outro pagamento\n":"") + (boletoValorDif(i)!=null?(boletoValorDif(i)>i.valor?`💲 Desconto: boleto ${brl(boletoValorDif(i))}, pagar ${brl(i.valor)} (conferir no app)\n`:`⚠ Valor no boleto ${brl(boletoValorDif(i))} diferente do lançamento\n`):"") : `Pix ${fav(i)}${i.chaveAvulsa?" (⚠ chave diferente do cadastro, confirmada)":""}: ${chave(i)}\n` + (alertaCC(i).includes("⚠")?"⚠ Conferir antes de pagar: código com valor, recebedor ou duplicidade divergente\n":"") + (i.jaPago&&i.jaPago.exato?"⚠ Este lançamento já consta como pago no histórico: confirmar antes de pagar\n":"");
     });
   }
@@ -498,6 +508,7 @@ function emv(code){ const c=String(code||"").replace(/\r?\n/g,"").trim(); if(!/^
   return out; }
 // ---------- BOLETO: limpa (só dígitos) e valida dígitos verificadores ----------
 function soDigitos(x){ return String(x||"").replace(/\D/g,""); }
+function soDigitosOuTexto(k){ k=String(k||"").trim(); if(!k) return ""; if(/@|^000201|^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(k)) return k.toLowerCase(); return soDigitos(k); }
 function mod10(n){ let s=0, p=2; for(let i=n.length-1;i>=0;i--){ let v=+n[i]*p; s+= v>9 ? Math.floor(v/10)+v%10 : v; p=p===2?1:2; } return (10-s%10)%10; }
 function mod11(n, pesoMax=9){ let s=0, p=2; for(let i=n.length-1;i>=0;i--){ s+=+n[i]*p; p=p===pesoMax?2:p+1; } return s%11; }
 function dvBancario(n){ const r=11-mod11(n); return (r===0||r===10||r===11)?1:r; }
@@ -619,22 +630,29 @@ async function aplicarImport(){
   if(!itens.length){ toast("Nenhum pagamento em aberto encontrado. Confira as colunas."); return; }
   // junta partes do mesmo pagamento (lançamento dividido por etapa no Mais Controle)
   // 1º pelo Índice (12.1, 12.2...); 2º pelo mesmo favorecido + mesma chave/boleto + mesma conta + mesmo vencimento + mesma descrição
+  // regra rígida: só junta com conta pagadora do MC preenchida e igual, mesmo fornecedor/CPF-CNPJ,
+  // mesma chave Pix (ou linha do boleto), mesmo tipo e mesmo vencimento. Sem conta/chave → nunca junta.
+  const pagDe = it => it.tipo==="Boleto" ? soDigitos(it.linha) : soDigitosOuTexto(it.pixLanc || it.chaveCad || "");
+  const parte = it => it.partes || [{etapa:it.etapa, valor:it.valor, obra:it.obra, idx:it.idx||"", desc:it.desc}];
   const juntar=(lista, chaveDe)=>{ const out=[], por={};
     for(const it of lista){ const k=chaveDe(it); if(!k){ out.push(it); continue; }
       const g0=por[k];
-      if(!g0){ it.partes ||= [{etapa:it.etapa, valor:it.valor, obra:it.obra}]; por[k]=it; out.push(it); }
-      else { g0.valor=Math.round((g0.valor+it.valor)*100)/100; g0.partes.push(...(it.partes||[{etapa:it.etapa, valor:it.valor, obra:it.obra}]));
+      if(!g0){ it.partes = parte(it); por[k]=it; out.push(it); }
+      else { g0.valor=Math.round((g0.valor+it.valor)*100)/100; g0.partes.push(...parte(it));
         if(!g0.linha && it.linha) g0.linha=it.linha; if(!g0.pixLanc && it.pixLanc) g0.pixLanc=it.pixLanc; if(!g0.oc && it.oc) g0.oc=it.oc; } }
     return out; };
-  let grupos = juntar(itens, it=>{ const m=/^(\d+)[.,]\d+$/.exec(it.idx||""); return m ? [m[1], norm(it.forn), it.contaMC, it.vencISO, it.tipo].join("|") : ""; });
-  grupos = juntar(grupos, it=>{ const pag = it.tipo==="Boleto" ? soDigitos(it.linha) : (it.pixLanc || it.chaveCad || "");
-    return pag ? [norm(it.forn), it.contaMC, it.vencISO, it.tipo, pag, norm(it.desc)].join("|") : ""; });
+  const base = it => { const pag=pagDe(it); return (it.contaMC && pag) ? [norm(it.forn), soDigitos(it.cpf), norm(it.contaMC), it.vencISO, it.tipo, pag].join("|") : ""; };
+  // 1º: partes do mesmo lançamento (Índice 12.1, 12.2...)
+  let grupos = juntar(itens, it=>{ const m=/^(\d+)[.,]\d+$/.exec(it.idx||""); const b=base(it); return m && b ? "i"+m[1]+"|"+b : ""; });
+  // 2º: lançamentos diferentes (inclusive de obras diferentes) pagáveis num Pix só: mesma base + mesma descrição
+  grupos = juntar(grupos, it=>{ const b=base(it); return b ? b+"|"+norm(it.desc) : ""; });
   let unificados=0;
   for(const g1 of grupos){ if(g1.partes && g1.partes.length>1){ unificados++;
+      g1.composicao = g1.partes.map(p=>({idx:p.idx||"", obra:p.obra||"", etapa:p.etapa||"", valor:p.valor}));
       const porEt={}; g1.partes.forEach(p=>{ const e=p.etapa||"—"; porEt[e]=Math.round(((porEt[e]||0)+p.valor)*100)/100; });
       g1.etapa=Object.entries(porEt).map(([e,v])=>`${e} ${brl(v)}`).join(" + ");
       const obras=[...new Set(g1.partes.map(p=>p.obra))]; if(obras.length>1) g1.obra=obras.join(" + "); }
-    delete g1.partes; delete g1.idx; }
+    if(!g1.composicao) g1.composicao=[]; delete g1.partes; delete g1.idx; }
   itens=grupos;
   indexarForn();
   const usados={};
@@ -648,7 +666,7 @@ async function aplicarImport(){
   render(); toast(itens.length+(itens.length===1?" pagamento importado":" pagamentos importados")+(unificados?` · ${unificados} divididos por etapa foram unificados`:"")+(pulados?` · ${pulados} já pagos ignorados`:""));
 }
 // ---------- LOTE COMPARTILHADO (db) ----------
-const DATA_KEYS=["oc","nf","obra","etapa","cpf","forn","desc","valor","tipo","linha","pixLanc","favLanc","venc","vencISO","contaMC","chaveCad","favCad"];
+const DATA_KEYS=["oc","nf","obra","etapa","cpf","forn","desc","valor","tipo","linha","pixLanc","favLanc","venc","vencISO","contaMC","chaveCad","favCad","composicao"];
 const ESTADO_KEYS=["status","motivo","pago","pagoPor","pagoEm","conferidoPor","conferidoEm","chaveAvulsa","confirmada","contaManual","chaveManual","favManual","linhaManual"];
 let DB=null, USER=null, MEU_ID=null, NOMES={}, RENDER_PENDENTE=false;
 const FILA={};
