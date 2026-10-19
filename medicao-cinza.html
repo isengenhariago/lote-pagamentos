@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
 <!--
-  MEDIÇÃO DO CINZA – IS ENGENHARIA · Rev03 (19/10/2026)
+  MEDIÇÃO DO CINZA – IS ENGENHARIA · Rev04 (19/10/2026)
   Hospedagem: GitHub Pages (isengenhariago/lote-pagamentos). Dados: Firebase is-lote-pagamentos.
   Coleções: cinza_obras/{obraId} · cinza_config/params
   Para incluir alguém: e-mail em ALLOWED_EMAILS (e ADMIN_EMAILS) abaixo E nas regras do Firestore.
@@ -158,6 +158,7 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .wrap{overflow-x:auto}
 .t input[type=text],.t input:not([type]){width:90px;border:1px solid var(--line);border-radius:5px;padding:6px;background:var(--paper);color:var(--ink);text-align:right}
 .t input.w{width:100%;text-align:left}
+.t select{border:1px solid var(--line);border-radius:5px;padding:6px;background:var(--paper);color:var(--ink)}
 .del{background:none;border:0;color:var(--bad);font-size:18px;line-height:1}
 .tag{font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;background:var(--bg);color:var(--muted);white-space:nowrap}
 
@@ -305,20 +306,21 @@ function normalizeObra(o){
 }
 
 /* ===================== CÁLCULO ===================== */
-function valorCasa(c){ const a=num(c.area); if(a<=0) return 0; return a*PARAMS.rm2 + (a<PARAMS.limPequena?PARAMS.adicPequena:0); }
-function execCasa(c){ const v=valorCasa(c); let s=0; ITENS.forEach(it=>{ s+=(num(c.p2?.[it[0]])||0)*it[3]/100*v; }); return s; }
+function rm2Of(o){ return num(o&&o.rm2)>0 ? num(o.rm2) : PARAMS.rm2; }
+function valorCasa(c,o){ const a=num(c.area); if(a<=0) return 0; return a*rm2Of(o) + (a<PARAMS.limPequena?PARAMS.adicPequena:0); }
+function execCasa(c,o){ const v=valorCasa(c,o); let s=0; ITENS.forEach(it=>{ s+=(num(c.p2?.[it[0]])||0)*it[3]/100*v; }); return s; }
 function extraValor(o,e){ const x=o.extras?.[e.k]||{}; const unit=e.u?PARAMS.unit[e.u]:1; return num(x.qtd)*unit; }
 function prazoMeses(n){ const p=PARAMS.prazo; if(n<=1) return p.c1; if(n===2) return p.c2; if(n===3) return p.c3; if(n===4) return p.c4; return p.c4+(n-4)*p.extra; }
 function calc(o){
   const casas=o.casas||[];
-  const contratoCasas=casas.reduce((a,c)=>a+valorCasa(c),0);
-  const execCasas=casas.reduce((a,c)=>a+execCasa(c),0);
+  const contratoCasas=casas.reduce((a,c)=>a+valorCasa(c,o),0);
+  const execCasas=casas.reduce((a,c)=>a+execCasa(c,o),0);
   let contratoExtras=0, execExtras=0;
   EXTRAS.forEach(e=>{ const v=extraValor(o,e); contratoExtras+=v; execExtras+=v*(num(o.extras?.[e.k]?.pct)||0); });
   const contrato=contratoCasas+contratoExtras, exec=execCasas+execExtras;
   const meds=(o.medicoes||[]).slice().sort((a,b)=>(a.data||'').localeCompare(b.data||''));
   const pago=meds.reduce((a,m)=>a+num(m.pago),0);
-  const semana=num(o.semana);
+  const semana=(o.equipe&&o.equipe.length)?medTotal(o):num(o.semana);
   const diff=pago+semana-exec;           // >0 pagamento à frente da obra; <0 empreiteiro com saldo a receber
   const tolV=Math.max(PARAMS.tolMin, PARAMS.tolV*exec);
   let st,tit,det;
@@ -448,7 +450,7 @@ function listView(){
   const ids=Object.keys(OBRAS).sort((a,b)=>tituloObra(OBRAS[a]).localeCompare(tituloObra(OBRAS[b])));
   const rows=ids.map(id=>{const o=OBRAS[id], c=calc(o), pz=prazoTxt(c.prazo);
     return `<button class="obra-row ${c.st}" data-open="${id}">
-      <div><div class="nm">${esc(tituloObra(o))}</div><div class="sub">${esc(o.empreiteiro||'Empreiteiro não informado')} · ${o.casas?.length||0} casa(s) · contrato ${brl(c.contrato)} · prazo: ${esc(pz.v)}</div></div>
+      <div><div class="nm">${esc(tituloObra(o))}</div><div class="sub">${esc(o.empreiteiro||'Empreiteiro não informado')} · ${o.casas?.length||0} casa(s) · ${brl(rm2Of(o))}/m² · contrato ${brl(c.contrato)} · prazo: ${esc(pz.v)}</div></div>
       <span class="chip ${c.st}">${chipTxt[c.st]}</span>
       <div class="rg">${ruler(c.pExec,c.pPago,c.pSem,c.st)}<div class="ruler-legend"><span><span class="sw" style="background:var(--blue)"></span>Executado <b>${pct(c.pExec)}</b></span><span><span class="sw" style="background:var(--ink)"></span>Pago <b>${pct(c.pPago)}</b></span>${c.st!=='na'?`<span>${c.diff>0?'À frente da obra':'Saldo do empreiteiro'}: <b>${brl(Math.abs(c.diff))}</b></span>`:''}</div></div>
     </button>`;}).join('');
@@ -469,6 +471,9 @@ function obraFields(o){
       <label class="f">Empreiteiro<input id="f_empreiteiro" data-f="empreiteiro" value="${esc(o.empreiteiro||'')}"></label>
       <label class="f">Engenheiro responsável<input id="f_engenheiro" data-f="engenheiro" value="${esc(o.engenheiro||'')}"></label>
       <label class="f">Início do cinza<input type="date" id="f_inicio" data-f="inicio" value="${esc(o.inicio||'')}"></label>
+      <label class="f">R$/m² do empreiteiro<input id="f_rm2" data-f="rm2" inputmode="decimal" value="${esc(o.rm2!=null&&o.rm2!==''?String(o.rm2).replace('.',','):'')}" placeholder="${String(PARAMS.rm2)} (padrão)"></label>
+      <label class="f">Chave Pix do empreiteiro<input id="f_pix" data-f="pix" value="${esc(o.pix||'')}" placeholder="celular, CPF, e-mail ou chave aleatória"></label>
+      <label class="f">Titular do Pix<input id="f_pixNome" data-f="pixNome" value="${esc(o.pixNome||'')}"></label>
     </div>`;
 }
 function novaView(){
@@ -479,7 +484,7 @@ function novaView(){
 function obraView(id){
   const o=OBRAS[id], c=calc(o), tab=route.tab||'vistoria', pz=prazoTxt(c.prazo);
   const tabs=[['resumo','Resumo'],['vistoria','Vistoria'],['medicao','Medição da semana'],['historico','Histórico'],['dados','Dados da obra']];
-  const casasR=(o.casas||[]).map((cs,k)=>{const v=valorCasa(cs), e=execCasa(cs);
+  const casasR=(o.casas||[]).map((cs,k)=>{const v=valorCasa(cs,o), e=execCasa(cs,o);
     return `<div class="casa-r"><span class="n">${esc(cs.nome||('Casa '+(k+1)))}</span>${ruler(v?e/v:0,-1)}<span class="p">${pct(v?e/v:0)}</span></div>`;}).join('');
   let body='';
   if(tab==='resumo') body=resumoTab(id,o,c);
@@ -495,7 +500,7 @@ function obraView(id){
     <div class="ruler-legend"><span><span class="sw" style="background:var(--blue)"></span>Executado <b>${brl(c.exec)}</b> (${pct(c.pExec)})</span><span><span class="sw" style="background:var(--ink)"></span>Pago <b>${brl(c.pago)}</b> (${pct(c.pPago)})</span>${c.semana?`<span>Pontilhado: pago + pedido da semana <b>${brl(c.pago+c.semana)}</b></span>`:''}</div>
   </div>
   <div class="figs">
-    <div class="fig"><div class="l">Contrato</div><div class="v num">${brl(c.contrato)}</div><div class="s">${(o.casas||[]).reduce((a,x)=>a+num(x.area),0).toLocaleString('pt-BR')} m² × ${brl(PARAMS.rm2)}</div></div>
+    <div class="fig"><div class="l">Contrato</div><div class="v num">${brl(c.contrato)}</div><div class="s">${(o.casas||[]).reduce((a,x)=>a+num(x.area),0).toLocaleString('pt-BR')} m² × ${brl(rm2Of(o))}</div></div>
     <div class="fig"><div class="l">Liberável sem alerta</div><div class="v num">${brl(c.lib)}</div><div class="s">executado − pago</div></div>
     <div class="fig"><div class="l">Saldo do contrato</div><div class="v num">${brl(c.saldo)}</div><div class="s">falta executar ${brl(c.restante)}</div></div>
     <div class="fig"><div class="l">Prazo do cinza</div><div class="v num ${pz.cls}">${esc(pz.v)}</div><div class="s">${esc(pz.s)}</div></div>
@@ -508,7 +513,7 @@ function resumoTab(id,o,c){
   const casas=o.casas||[];
   const linhas=GRUPOS.map(g=>{
     const its=ITENS.filter(it=>it[2]===g); let v=0,e=0;
-    casas.forEach(cs=>{const vc=valorCasa(cs); its.forEach(it=>{v+=it[3]/100*vc; e+=num(cs.p2?.[it[0]])*it[3]/100*vc;});});
+    casas.forEach(cs=>{const vc=valorCasa(cs,o); its.forEach(it=>{v+=it[3]/100*vc; e+=num(cs.p2?.[it[0]])*it[3]/100*vc;});});
     return {g,v,e};
   });
   let xv=0,xe=0; EXTRAS.forEach(ex=>{const v=extraValor(o,ex); xv+=v; xe+=v*num(o.extras?.[ex.k]?.pct);});
@@ -517,7 +522,7 @@ function resumoTab(id,o,c){
   const disp=c.contrato-c.pago, rec=c.exec-c.pago, pz=prazoTxt(c.prazo);
   const rows=linhas.map(l=>`<tr><td><b>${esc(l.g)}</b></td><td class="r num">${brl(l.v,2)}</td><td class="r num">${brl(l.e,2)}</td><td class="r num">${brl(l.v-l.e,2)}</td><td class="bcell">${bar(l.v?l.e/l.v:0)}</td><td class="r num">${pct(l.v?l.e/l.v:0)}</td></tr>`).join('');
   return `<div id="resumo">
-  <div class="rs-head"><div><div class="rs-t">${esc(tituloObra(o))}</div><div class="hint">Empreiteiro: ${esc(o.empreiteiro||'—')} · ${casas.length} casa(s) · ${casas.reduce((a,x)=>a+num(x.area),0).toLocaleString('pt-BR')} m² × ${brl(PARAMS.rm2)} · posição em ${fmtDate(today())}</div></div><div class="mark rs-logo">IS</div></div>
+  <div class="rs-head"><div><div class="rs-t">${esc(tituloObra(o))}</div><div class="hint">Empreiteiro: ${esc(o.empreiteiro||'—')} · ${casas.length} casa(s) · ${casas.reduce((a,x)=>a+num(x.area),0).toLocaleString('pt-BR')} m² × ${brl(rm2Of(o))} · posição em ${fmtDate(today())}</div></div><div class="mark rs-logo">IS</div></div>
   <div class="rs-tot">
     <div><div class="l">Valor do contrato</div><div class="v num">${brl(c.contrato,2)}</div></div>
     <div><div class="l">Executado</div><div class="v num" style="color:var(--blue)">${brl(c.exec,2)}</div><div class="s">${pct(c.pExec)} da obra</div></div>
@@ -534,7 +539,7 @@ function resumoTab(id,o,c){
 }
 function vistoriaTab(id,o){
   const casas=o.casas||[]; if(!casas.length) return '<div class="empty">Cadastre as casas na aba Dados da obra.</div>';
-  const k=Math.min(route.casa||0,casas.length-1), cs=casas[k], vc=valorCasa(cs);
+  const k=Math.min(route.casa||0,casas.length-1), cs=casas[k], vc=valorCasa(cs,o);
   const pick=`<div class="casa-pick">${casas.map((x,i)=>`<button aria-pressed="${i===k}" data-casa="${i}">${esc(x.nome||('Casa '+(i+1)))}</button>`).join('')}${casas.length>1?'<button data-copy="1">Aplicar a todas</button>':''}</div>`;
   const steps=[0,.25,.5,.75,1];
   const html=GRUPOS.map(g=>{
@@ -548,22 +553,111 @@ function vistoriaTab(id,o){
   return `${pick}<div class="card"><p class="hint" style="margin-bottom:10px">Toque no % executado de cada item, conferido em obra. Salva automaticamente.</p>${html}</div>
   <div class="card"><h3>Serviços extras da obra</h3>${exs.map(e=>{const v=num(o.extras?.[e.k]?.pct);return `<div class="item"><div><div class="nm">${esc(e.nm)}</div><div class="pw">${brl(extraValor(o,e),2)}</div></div><div class="seg">${steps.map(s=>`<button aria-pressed="${Math.abs(v-s)<0.001}" data-x="${e.k}" data-v="${s}">${s*100}</button>`).join('')}</div></div>`;}).join('')||'<p class="hint">Sem extras cadastrados (aba Dados da obra).</p>'}</div>`;
 }
+const FUNCOES=['Encarregado','Pedreiro','Ajudante','Outro'];
+const FUNC_PL={Encarregado:'ENCARREGADO',Pedreiro:'PEDREIROS',Ajudante:'AJUDANTES',Outro:'OUTROS'};
+function periodoPadrao(){ const d=new Date(); const dow=d.getDay(); const back=(dow+1)%7; const ate=new Date(d); ate.setDate(d.getDate()-back); const de=new Date(ate); de.setDate(ate.getDate()-5); return {de:iso(de),ate:iso(ate)}; }
+function medTotal(o){ return (o.equipe||[]).reduce((a,r)=>a+num(r.diarias)*num(r.valor),0)+num(o.ajuste?.valor); }
 function medicaoTab(id,o,c){
   const col=c.st==='ok'?'ok':c.st==='na'?'muted':(c.st==='bad'?'bad':'warn');
-  return `<div class="card"><h3>Medição solicitada pelo empreiteiro</h3>
-    <label class="f">Valor pedido nesta semana (R$)<input class="big-in num" id="semana" inputmode="decimal" value="${o.semana?num(o.semana).toLocaleString('pt-BR'):''}" placeholder="0"></label>
-    <div class="lib"><span>Liberável sem alerta (executado − pago)</span><span class="v">${brl(c.lib)}</span></div>
-    <div class="lib"><span>Pago + pedido − executado</span><span class="v" style="color:var(--${col})">${brl(c.diff)}</span></div>
-    <p class="hint">Verde até o executado · amarelo acima do executado até ${pct(PARAMS.tolV)} · vermelho acima de ${pct(PARAMS.tolV)} (mínimo ${brl(PARAMS.tolMin)}). O alerta não trava o pagamento.</p>
+  const per=o.periodo||periodoPadrao(); const eq=o.equipe||[];
+  const rows=eq.map((r,i)=>`<tr>
+    <td><select data-eqf="${i}" aria-label="Função">${FUNCOES.map(f=>`<option ${r.funcao===f?'selected':''}>${f}</option>`).join('')}</select></td>
+    <td><input class="w" id="eqn${i}" data-eqn="${i}" value="${esc(r.nome||'')}" placeholder="Nome"></td>
+    <td class="r"><input id="eqd${i}" data-eqd="${i}" inputmode="decimal" style="width:60px" value="${r.diarias!==''&&r.diarias!=null?String(r.diarias).replace('.',','):''}"></td>
+    <td class="r"><input id="eqv${i}" data-eqv="${i}" inputmode="decimal" style="width:80px" value="${r.valor!==''&&r.valor!=null?String(r.valor).replace('.',','):''}"></td>
+    <td class="r num">${brl(num(r.diarias)*num(r.valor),2)}</td>
+    <td><button class="del" data-eqdel="${i}" aria-label="Remover">×</button></td></tr>`).join('');
+  const tot=medTotal(o);
+  return `<div class="card"><h3>Medição semanal do empreiteiro</h3>
+    <div class="grid2"><label class="f">De<input type="date" id="perDe" value="${per.de}"></label><label class="f">Até<input type="date" id="perAte" value="${per.ate}"></label></div>
+    <div class="wrap" style="margin-top:10px"><table class="t"><thead><tr><th>Função</th><th>Nome</th><th class="r">Diárias</th><th class="r">R$/diária</th><th class="r">Valor</th><th></th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="6" class="hint">Cadastre a equipe uma vez: nas próximas semanas só muda o número de diárias.</td></tr>'}</tbody></table></div>
+    <div class="row-btns"><button class="btn ghost" id="eqAdd">+ Adicionar profissional</button><button class="btn ghost" id="eqZero">Zerar diárias</button></div>
+    <div class="grid2" style="margin-top:10px"><label class="f">Ajuste (+ acréscimo / − desconto, R$)<input id="ajV" inputmode="decimal" value="${o.ajuste?.valor?String(o.ajuste.valor).replace('.',','):''}"></label><label class="f">Motivo do ajuste<input id="ajO" value="${esc(o.ajuste?.obs||'')}" placeholder="ex.: adiantamento, material descontado"></label></div>
+    <div class="lib"><span>Total da medição</span><span class="v">${brl(tot,2)}</span></div>
+    ${eq.length?'':`<label class="f" style="margin-top:6px">Ou digite só o valor pedido (R$)<input class="big-in num" id="semana" inputmode="decimal" value="${o.semana?num(o.semana).toLocaleString('pt-BR'):''}" placeholder="0"></label>`}
+  </div>
+  <div class="card"><h3>Conferência com a obra</h3>
+    <div class="lib" style="border-top:0;margin-top:0"><span>Liberável sem alerta (executado − pago)</span><span class="v">${brl(c.lib)}</span></div>
+    <div class="lib"><span>Pago + esta medição − executado</span><span class="v" style="color:var(--${col})">${brl(c.diff)}</span></div>
+    <p class="hint">${esc(c.tit)}. Verde até o executado · amarelo até ${pct(PARAMS.tolV)} acima · vermelho acima de ${pct(PARAMS.tolV)}. O alerta não trava o pagamento.</p>
+  </div>
+  <div class="card"><h3>Enviar no grupo</h3>
+    <label style="display:flex;gap:8px;align-items:center;font-size:14px;margin-bottom:10px"><input type="checkbox" id="incConf" ${o.incConf===false?'':'checked'}> Incluir conferência (executado e alerta) na imagem</label>
+    <img id="medImg" alt="Prévia da medição" style="width:100%;max-width:560px;border:1px solid var(--line);border-radius:6px;display:block;background:#fff">
+    <div class="row-btns">
+      <button class="btn blue" id="shareImg">Compartilhar imagem</button>
+      <button class="btn ghost" id="copyImg">Copiar imagem</button>
+      <button class="btn ghost" id="dlImg">Baixar PNG</button>
+      <button class="btn ghost" id="copyTxt">Copiar texto</button>
+      <button class="btn ghost" id="copyPix" ${o.pix?'':'disabled'}>Copiar chave Pix</button>
+    </div>
+    <p class="hint" style="margin-top:8px">No celular, "Compartilhar" abre o WhatsApp direto. Mande a chave Pix em mensagem separada (padrão do grupo de pagamentos). ${o.pix?'':'Cadastre a chave Pix em Dados da obra.'}</p>
   </div>
   <div class="card"><h3>Registrar pagamento</h3>
     <div class="grid2">
       <label class="f">Data do pagamento<input type="date" id="mData" value="${today()}"></label>
-      <label class="f">Valor pago (R$)<input id="mPago" inputmode="decimal" value="${o.semana?num(o.semana).toLocaleString('pt-BR'):''}"></label>
+      <label class="f">Valor pago (R$)<input id="mPago" inputmode="decimal" value="${(eq.length?tot:num(o.semana))?(eq.length?tot:num(o.semana)).toLocaleString('pt-BR',{minimumFractionDigits:2}):''}"></label>
     </div>
-    <label class="f" style="margin-top:10px">Observação<input id="mObs" placeholder="ex.: medição semana 12 – reboco C1"></label>
+    <label class="f" style="margin-top:10px">Observação<input id="mObs" value="Medição ${fmtDate(per.de)} a ${fmtDate(per.ate)}"></label>
     <div class="row-btns"><button class="btn blue" id="regBtn">Registrar pagamento</button></div>
+    <p class="hint" style="margin-top:6px">Grava a medição com a equipe no histórico, zera as diárias e abre a próxima semana.</p>
   </div>`;
+}
+/* ---------- imagem da medição (canvas) ---------- */
+function medCanvas(o,c){
+  const per=o.periodo||periodoPadrao(), eq=o.equipe||[], tot=medTotal(o), conf=o.incConf!==false;
+  const W=900, S=2, F='Arial, Helvetica, sans-serif';
+  const groups=FUNCOES.map(f=>({f,rows:eq.filter(r=>(r.funcao||'Outro')===f)})).filter(g=>g.rows.length);
+  const rowsH=groups.reduce((a,g)=>a+34+g.rows.length*34,0) + (o.ajuste&&num(o.ajuste.valor)?34:0);
+  const infoN=5+(conf?3:0)+(o.pix?2:0);
+  const H=150+44+rowsH+50+30+infoN*34+40;
+  const cv=document.createElement('canvas'); cv.width=W*S; cv.height=H*S; const x=cv.getContext('2d'); x.scale(S,S);
+  x.fillStyle='#fff'; x.fillRect(0,0,W,H);
+  x.fillStyle='#001C37'; x.fillRect(0,0,W,96); x.fillStyle='#0071B9'; x.fillRect(0,96,W,5);
+  x.fillStyle='#0071B9'; x.fillRect(W-86,24,52,48); x.fillStyle='#fff'; x.font=`bold 24px ${F}`; x.textAlign='center'; x.fillText('IS',W-60,57);
+  x.textAlign='left'; x.font=`bold 26px ${F}`;
+  x.fillText(`MEDIÇÃO ${(o.empreiteiro||'EMPREITEIRO').toUpperCase()}`,30,44);
+  x.font=`17px ${F}`; x.fillStyle='rgba(255,255,255,.85)'; x.fillText(`${fmtDate(per.de)} a ${fmtDate(per.ate)}`,30,74);
+  let y=136; x.fillStyle='#001C37'; x.font=`bold 20px ${F}`; x.fillText(tituloObra(o),30,y);
+  y+=22;
+  const cols=[30,470,600,760,870];
+  x.fillStyle='#E3F0F9'; x.fillRect(20,y,W-40,36); x.fillStyle='#001C37'; x.font=`bold 14px ${F}`;
+  x.fillText('NOME',cols[0],y+23); x.textAlign='center'; x.fillText('DIÁRIAS',cols[1]+30,y+23); x.fillText('R$/DIÁRIA',cols[2]+50,y+23); x.textAlign='right'; x.fillText('VALOR',cols[4],y+23); x.textAlign='left';
+  y+=36;
+  const line=yy=>{x.strokeStyle='#D9DEE3';x.lineWidth=1;x.beginPath();x.moveTo(20,yy);x.lineTo(W-20,yy);x.stroke();};
+  groups.forEach(g=>{
+    x.fillStyle='#F2F4F6'; x.fillRect(20,y,W-40,34); x.fillStyle='#5E6873'; x.font=`bold 13px ${F}`; x.fillText(FUNC_PL[g.f],cols[0],y+22); y+=34;
+    g.rows.forEach(r=>{ x.fillStyle='#0B1A2A'; x.font=`16px ${F}`; x.fillText((r.nome||'—').toUpperCase(),cols[0],y+22);
+      x.textAlign='center'; x.fillText(String(num(r.diarias)).replace('.',','),cols[1]+30,y+22); x.fillText(brl(num(r.valor),2),cols[2]+50,y+22);
+      x.textAlign='right'; x.fillText(brl(num(r.diarias)*num(r.valor),2),cols[4],y+22); x.textAlign='left'; y+=34; line(y); });
+  });
+  if(o.ajuste&&num(o.ajuste.valor)){ x.fillStyle='#0B1A2A'; x.font=`italic 15px ${F}`; x.fillText('Ajuste'+(o.ajuste.obs?': '+o.ajuste.obs:''),cols[0],y+22); x.textAlign='right'; x.fillText(brl(num(o.ajuste.valor),2),cols[4],y+22); x.textAlign='left'; y+=34; line(y); }
+  x.fillStyle='#001C37'; x.fillRect(20,y+6,W-40,44); x.fillStyle='#fff'; x.font=`bold 20px ${F}`; x.fillText('TOTAL DA MEDIÇÃO',cols[0],y+35); x.textAlign='right'; x.fillText(brl(tot,2),cols[4],y+35); x.textAlign='left';
+  y+=50+30;
+  const info=[];
+  if(o.pix){ info.push(['Pix',o.pix]); info.push(['Titular',o.pixNome||'—']); }
+  info.push(['Valor da empreita',brl(c.contrato,2)]);
+  info.push(['Valor já passado',brl(c.pago,2)]);
+  info.push(['Porcentagem paga',pct(c.pPago)]);
+  info.push(['Com esta medição',`${brl(c.pago+tot,2)} (${pct(c.contrato?(c.pago+tot)/c.contrato:0)})`]);
+  info.push(['Saldo do contrato após',brl(c.contrato-c.pago-tot,2)]);
+  if(conf){ info.push(['Executado (vistoria)',`${brl(c.exec,2)} (${pct(c.pExec)})`]); info.push(['Prazo do cinza',prazoTxt(c.prazo).v]); info.push(['Conferência',c.tit]); }
+  info.forEach(([k,v],i)=>{ const yy=y+i*34; if(i%2===0){x.fillStyle='#F7F9FA';x.fillRect(20,yy-23,W-40,34);}
+    x.fillStyle='#5E6873'; x.font=`15px ${F}`; x.fillText(k,30,yy);
+    let colr='#0B1A2A'; if(k==='Conferência') colr=c.st==='ok'?'#1B7A43':c.st==='bad'?'#C0261C':'#B07800';
+    x.fillStyle=colr; x.font=`bold 16px ${F}`; x.textAlign='right'; x.fillText(v,W-30,yy); x.textAlign='left'; });
+  x.fillStyle='#909296'; x.font=`12px ${F}`; x.fillText(`IS Engenharia e Construção · gerado em ${new Date().toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'})}`,30,H-16);
+  return cv;
+}
+function medTexto(o,c){
+  const per=o.periodo||periodoPadrao(), eq=o.equipe||[], tot=medTotal(o);
+  let t=`*MEDIÇÃO ${(o.empreiteiro||'').toUpperCase()} – ${fmtDate(per.de)} a ${fmtDate(per.ate)}*\n${tituloObra(o)}\n`;
+  FUNCOES.forEach(f=>{const rs=eq.filter(r=>(r.funcao||'Outro')===f); if(!rs.length) return; t+=`\n_${FUNC_PL[f]}_\n`; rs.forEach(r=>t+=`${(r.nome||'—').toUpperCase()}: ${String(num(r.diarias)).replace('.',',')} × ${brl(num(r.valor),2)} = ${brl(num(r.diarias)*num(r.valor),2)}\n`);});
+  if(o.ajuste&&num(o.ajuste.valor)) t+=`\nAjuste${o.ajuste.obs?' ('+o.ajuste.obs+')':''}: ${brl(num(o.ajuste.valor),2)}\n`;
+  t+=`\n*TOTAL: ${brl(tot,2)}*\nValor da empreita: ${brl(c.contrato,2)}\nJá passado: ${brl(c.pago,2)} (${pct(c.pPago)})\nCom esta medição: ${pct(c.contrato?(c.pago+tot)/c.contrato:0)}`;
+  if(o.incConf!==false) t+=`\nExecutado (vistoria): ${pct(c.pExec)} · ${c.tit}`;
+  return t;
 }
 function historicoTab(id,o,c){
   if(IMPORT) return importView(o);
@@ -599,7 +693,7 @@ function chart(meds,c){
     <div class="ruler-legend"><span><span class="sw" style="background:var(--ink)"></span>Pago acumulado</span><span><span class="sw" style="background:var(--blue)"></span>Executado na data do pagamento</span></div>`;
 }
 function dadosTab(id,o,c){
-  const casas=(o.casas||[]).map((cs,k)=>`<tr><td><input class="w" data-cn="${k}" value="${esc(cs.nome||'')}"></td><td class="r"><input data-ca="${k}" inputmode="decimal" value="${cs.area!==''&&cs.area!=null?num(cs.area).toLocaleString('pt-BR'):''}" placeholder="m²"></td><td class="r num">${brl(valorCasa(cs),2)}</td><td><button class="del" data-delcasa="${k}" aria-label="Remover casa">×</button></td></tr>`).join('');
+  const casas=(o.casas||[]).map((cs,k)=>`<tr><td><input class="w" data-cn="${k}" value="${esc(cs.nome||'')}"></td><td class="r"><input data-ca="${k}" inputmode="decimal" value="${cs.area!==''&&cs.area!=null?num(cs.area).toLocaleString('pt-BR'):''}" placeholder="m²"></td><td class="r num">${brl(valorCasa(cs,o),2)}</td><td><button class="del" data-delcasa="${k}" aria-label="Remover casa">×</button></td></tr>`).join('');
   const ex=EXTRAS.map(e=>`<tr><td>${esc(e.nm)}</td><td>${e.un}</td><td class="r"><input data-xq="${e.k}" inputmode="decimal" value="${o.extras?.[e.k]?.qtd?num(o.extras[e.k].qtd).toLocaleString('pt-BR'):''}"></td><td class="r num">${e.u?brl(PARAMS.unit[e.u],2):'verba'}</td><td class="r num">${brl(extraValor(o,e),2)}</td></tr>`).join('');
   const n=(o.casas||[]).length;
   return `<div class="card"><h3>Identificação</h3>${obraFields(o)}
@@ -616,7 +710,7 @@ function paramsView(){
   const f=(k,l,v,h='')=>`<label class="f">${l}<input data-pk="${k}" inputmode="decimal" value="${String(v).replace('.',',')}">${h?`<span class="hint">${h}</span>`:''}</label>`;
   return `<button class="back" data-go="list">‹ Obras</button><div class="obra-title" style="margin-bottom:12px">Parâmetros</div>
   <p class="hint" style="margin-bottom:12px">Valem para todas as obras ao mesmo tempo.</p>
-  <div class="card"><h3>Contrato</h3><div class="grid2">${f('rm2','R$/m² do cinza',p.rm2,'Real em 6 obras: R$ 383–397/m²')}${f('adicPequena','Adicional por casa pequena (R$)',p.adicPequena)}${f('limPequena','Limite casa pequena (m²)',p.limPequena)}</div></div>
+  <div class="card"><h3>Contrato</h3><div class="grid2">${f('rm2','R$/m² padrão (obras sem valor próprio)',p.rm2,'Cada obra pode ter o seu em Dados da obra')}${f('adicPequena','Adicional por casa pequena (R$)',p.adicPequena)}${f('limPequena','Limite casa pequena (m²)',p.limPequena)}</div></div>
   <div class="card"><h3>Prazo do cinza (meses)</h3><div class="grid2">${f('z.c1','1 casa',z.c1)}${f('z.c2','2 casas',z.c2)}${f('z.c3','3 casas',z.c3)}${f('z.c4','4 casas',z.c4)}${f('z.extra','A partir de 5 casas: + meses por casa',z.extra)}</div></div>
   <div class="card"><h3>Unitários de extras</h3><div class="grid2">${f('u.arrimo','Arrimo (R$/m²)',u.arrimo)}${f('u.muro','Muro alvenaria (R$/m)',u.muro)}${f('u.rebocoMuro','Reboco muro por face (R$/m)',u.rebocoMuro)}${f('u.calcada','Calçada (R$/m²)',u.calcada)}${f('u.tatil','Piso tátil (R$/m)',u.tatil)}</div></div>
   <div class="card"><h3>Alertas</h3><div class="grid2">${f('tolV','Vermelho acima de (fração do executado)',p.tolV,'0,10 = 10%. Entre 0 e esse limite: amarelo.')}${f('tolMin','Diferença mínima para vermelho (R$)',p.tolMin)}</div>
@@ -656,11 +750,38 @@ function bind(){
   const cp=document.querySelector('[data-copy]'); if(cp) cp.onclick=()=>{ if(!confirm('Copiar o avanço desta casa para todas as casas da obra?')) return; const src=o.casas[k].p2||{}; saveSoon(id,{casas:o.casas.map(c=>({...c,p2:{...src}}))}); toast('Avanço aplicado a todas as casas'); };
   document.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>{const extras={...(o.extras||{})}; extras[b.dataset.x]={...(extras[b.dataset.x]||{}),pct:+b.dataset.v}; saveSoon(id,{extras});});
   const se=$('#semana'); if(se){ se.onchange=()=>saveObra(id,{semana:num(se.value)}); }
+  // equipe da medição
+  const eqSet=(i,k,v)=>{const equipe=(o.equipe||[]).map(r=>({...r})); equipe[i][k]=v; saveObra(id,{equipe});};
+  document.querySelectorAll('[data-eqf]').forEach(e=>e.onchange=()=>eqSet(+e.dataset.eqf,'funcao',e.value));
+  document.querySelectorAll('[data-eqn]').forEach(e=>e.onchange=()=>eqSet(+e.dataset.eqn,'nome',e.value.trim()));
+  document.querySelectorAll('[data-eqd]').forEach(e=>e.onchange=()=>eqSet(+e.dataset.eqd,'diarias',num(e.value)));
+  document.querySelectorAll('[data-eqv]').forEach(e=>e.onchange=()=>eqSet(+e.dataset.eqv,'valor',num(e.value)));
+  document.querySelectorAll('[data-eqdel]').forEach(b=>b.onclick=()=>saveObra(id,{equipe:(o.equipe||[]).filter((_,i)=>i!==+b.dataset.eqdel)}));
+  const ea=$('#eqAdd'); if(ea) ea.onclick=()=>{const eq=o.equipe||[]; const last=eq[eq.length-1]; saveObra(id,{equipe:[...eq,{funcao:last?last.funcao:'Encarregado',nome:'',diarias:'',valor:last?last.valor:''}],periodo:o.periodo||periodoPadrao()});};
+  const ez=$('#eqZero'); if(ez) ez.onclick=()=>saveObra(id,{equipe:(o.equipe||[]).map(r=>({...r,diarias:''}))});
+  const pd=$('#perDe'), pa=$('#perAte'); if(pd){ pd.onchange=pa.onchange=()=>saveObra(id,{periodo:{de:pd.value,ate:pa.value}}); }
+  const aV=$('#ajV'), aO=$('#ajO'); if(aV){ aV.onchange=aO.onchange=()=>saveObra(id,{ajuste:{valor:num(aV.value),obs:aO.value.trim()}}); }
+  const ic2=$('#incConf'); if(ic2) ic2.onchange=()=>saveObra(id,{incConf:ic2.checked});
+  const img=$('#medImg');
+  if(img){
+    const c0=calc(o); const cv=medCanvas(o,c0); img.src=cv.toDataURL('image/png');
+    const fname=`Medicao_${(o.empreiteiro||'empreiteiro').replace(/\W+/g,'_')}_${(o.periodo||periodoPadrao()).ate}.png`;
+    const blobP=()=>new Promise(r=>cv.toBlob(r,'image/png'));
+    $('#dlImg').onclick=async()=>{const b=await blobP(); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=fname; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),4000);};
+    $('#shareImg').onclick=async()=>{const b=await blobP(); const file=new File([b],fname,{type:'image/png'});
+      if(navigator.canShare&&navigator.canShare({files:[file]})){ try{await navigator.share({files:[file],title:'Medição'});}catch(e){} }
+      else { $('#dlImg').click(); toast('Compartilhar direto só no celular: imagem baixada'); } };
+    $('#copyImg').onclick=async()=>{ try{ const b=await blobP(); await navigator.clipboard.write([new ClipboardItem({'image/png':b})]); toast('Imagem copiada: cole no WhatsApp (Ctrl+V)'); }catch(e){ toast('Não deu para copiar aqui: use Baixar PNG'); } };
+    $('#copyTxt').onclick=async()=>{ try{await navigator.clipboard.writeText(medTexto(o,c0)); toast('Texto copiado');}catch(e){toast('Não deu para copiar');} };
+    const cpx=$('#copyPix'); if(cpx) cpx.onclick=async()=>{ try{await navigator.clipboard.writeText(o.pix); toast('Chave Pix copiada');}catch(e){toast('Não deu para copiar');} };
+  }
   const rb=$('#regBtn'); if(rb) rb.onclick=()=>{
     const pago=num($('#mPago').value), data=$('#mData').value; if(!pago||!data){toast('Informe data e valor pago');return;}
     const c=calc(o);
-    const medicoes=[...(o.medicoes||[]), {data,solicitado:num(o.semana)||pago,pago,exec:Math.round(c.exec*100)/100,obs:$('#mObs').value.trim(),by:user?.email||'demo',em:Date.now()}];
-    saveObra(id,{medicoes,semana:''}); toast('Pagamento registrado');
+    const per=o.periodo||periodoPadrao();
+    const medicoes=[...(o.medicoes||[]), {data,solicitado:c.semana||pago,pago,exec:Math.round(c.exec*100)/100,obs:$('#mObs').value.trim(),periodo:per,equipe:(o.equipe||[]).map(r=>({...r})),ajuste:o.ajuste||null,by:user?.email||'demo',em:Date.now()}];
+    const ate=new Date(per.ate+'T12:00'); const de2=new Date(ate); de2.setDate(ate.getDate()+2); const ate2=new Date(ate); ate2.setDate(ate.getDate()+7);
+    saveObra(id,{medicoes,semana:'',equipe:(o.equipe||[]).map(r=>({...r,diarias:''})),ajuste:null,periodo:{de:iso(de2),ate:iso(ate2)}}); toast('Pagamento registrado');
   };
   document.querySelectorAll('[data-delmed]').forEach(b=>b.onclick=()=>{ if(!confirm('Excluir este pagamento do histórico?')) return; saveObra(id,{medicoes:(o.medicoes||[]).filter((_,i)=>i!==+b.dataset.delmed)}); });
   if(route.tab==='dados') bindFields(o,(f,v)=>saveObra(id,{[f]:v}));
