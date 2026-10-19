@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
 <!--
-  MEDIÇÃO DO CINZA – IS ENGENHARIA · Rev02 (19/10/2026)
+  MEDIÇÃO DO CINZA – IS ENGENHARIA · Rev03 (19/10/2026)
   Hospedagem: GitHub Pages (isengenhariago/lote-pagamentos). Dados: Firebase is-lote-pagamentos.
   Coleções: cinza_obras/{obraId} · cinza_config/params
   Para incluir alguém: e-mail em ALLOWED_EMAILS (e ADMIN_EMAILS) abaixo E nas regras do Firestore.
@@ -164,6 +164,28 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .chart{width:100%;height:auto;display:block}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 16px;border-radius:6px;font-size:14px;z-index:50;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.on{opacity:1}
+.rs-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;background:var(--navy);color:#fff;border-radius:8px 8px 0 0;padding:16px}
+.rs-head .hint{color:rgba(255,255,255,.75);margin-top:4px}
+.rs-t{font-family:var(--cond);font-size:26px;font-weight:700;line-height:1.1}
+.rs-logo{width:40px;height:40px;font-size:20px}
+.rs-tot{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-top:0;margin-bottom:12px;border-radius:0 0 8px 8px;overflow:hidden}
+.rs-tot>div{background:var(--paper);padding:14px}
+.rs-tot .l{font-size:12px;color:var(--muted)} .rs-tot .v{font-family:var(--cond);font-size:26px;font-weight:700} .rs-tot .s{font-size:12px;color:var(--muted)}
+.rs-tot .hl{background:var(--blue-lt)} .rs-tot .hl .v{color:var(--navy)}
+@media (max-width:680px){.rs-tot{grid-template-columns:repeat(2,1fr)}}
+.rs-sit{border-radius:8px;padding:12px 14px;margin-bottom:12px;color:#fff;font-size:15px}
+.rs-sit.ok{background:var(--ok)} .rs-sit.bad{background:var(--bad)} .rs-sit b{font-family:var(--cond);font-size:19px}
+.t.rs td{vertical-align:middle} .t.rs tfoot td{font-weight:700;background:var(--navy);color:#fff;font-family:var(--cond);font-size:15px}
+.bcell{width:22%;min-width:90px}
+.rbar{height:12px;background:var(--bg);border:1px solid var(--line);border-radius:3px;overflow:hidden}
+.rbar>div{height:100%;background:var(--blue)}
+.t.rs tfoot .rbar{background:rgba(255,255,255,.2);border-color:transparent} .t.rs tfoot .rbar>div{background:#fff}
+@media print{
+  body{background:#fff} body *{visibility:hidden}
+  #resumo,#resumo *{visibility:visible} #resumo{position:absolute;left:0;top:0;width:100%}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .card{border:1px solid #ccc}
+}
 .login{max-width:420px;margin:12vh auto 0;text-align:center;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:28px}
 .login h2{font-family:var(--cond);font-size:28px;margin-bottom:6px}
 .login p{color:var(--muted);margin-bottom:18px}
@@ -188,7 +210,7 @@ const DEFAULT_PARAMS = {
   unit: { arrimo:75, muro:86, rebocoMuro:40, calcada:18, tatil:12 }
 };
 /* [chave, item, grupo, peso %] — chaves fixas: não renomear (são usadas nos dados salvos) */
-const GRUPOS = ['Fundação','Alvenaria','Laje','Platibanda','Instalações elétricas','Instalações hidrossanitárias','Reboco','Telhado','Contrapiso e calçadas'];
+const GRUPOS = ['Fundação','Alvenaria','Laje','Platibanda','Instalações elétricas','Instalações hidrossanitárias','Reboco','Cobertura','Contrapiso e calçadas'];
 const ITENS = [
  ['marc','Marcação de obra','Fundação',1.0],
  ['esc','Escavação de estacas','Fundação',3.5],
@@ -198,7 +220,7 @@ const ITENS = [
  ['alv_casa','Alvenaria da casa (vergas e contravergas)','Alvenaria',16.5],
  ['alv_muro','Alvenaria do muro (padrão do lote)','Alvenaria',4.0],
  ['portais','Portais de madeira','Alvenaria',1.5],
- ['ping_jan','Pingadeiras (janelas)','Alvenaria',0.5],
+ ['ping_jan','Pingadeiras','Alvenaria',0.5],
  ['laje_mont','Montagem da laje','Laje',5.0],
  ['laje_conc','Concretagem da laje','Laje',4.0],
  ['plat_alv',"Alvenaria da platibanda + cx d'água",'Platibanda',3.5],
@@ -217,11 +239,11 @@ const ITENS = [
  ['reb_req','Requadração','Reboco',2.0],
  ['reb_ext','Reboco externo','Reboco',3.0],
  ['reb_muro','Reboco muro frente','Reboco',1.5],
- ['tel_estr','Estrutura do telhado (acima da laje)','Telhado',3.5],
- ['tel_fibro','Telhamento fibrocimento','Telhado',1.5],
- ['tel_paraf','Parafusar telhas fibrocimento','Telhado',0.5],
- ['tel_mad_estr','Estrutura áreas de madeira','Telhado',1.5],
- ['tel_mad_telha','Telhamento áreas de madeira','Telhado',1.0],
+ ['tel_estr','Estrutura do telhado (acima da laje)','Cobertura',3.5],
+ ['tel_fibro','Telhamento fibrocimento','Cobertura',1.5],
+ ['tel_paraf','Parafusar telhas fibrocimento','Cobertura',0.5],
+ ['tel_mad_estr','Estrutura áreas de madeira','Cobertura',1.5],
+ ['tel_mad_telha','Telhamento áreas de madeira','Cobertura',1.0],
  ['contrapiso','Contrapiso','Contrapiso e calçadas',4.5],
  ['calc_int','Calçadas internas (vaga, corredor, serviço)','Contrapiso e calçadas',2.0],
  ['calc_ext','Calçada externa (passeio)','Contrapiso e calçadas',2.0]
@@ -456,10 +478,11 @@ function novaView(){
 }
 function obraView(id){
   const o=OBRAS[id], c=calc(o), tab=route.tab||'vistoria', pz=prazoTxt(c.prazo);
-  const tabs=[['vistoria','Vistoria'],['medicao','Medição da semana'],['historico','Histórico'],['dados','Dados da obra']];
+  const tabs=[['resumo','Resumo'],['vistoria','Vistoria'],['medicao','Medição da semana'],['historico','Histórico'],['dados','Dados da obra']];
   const casasR=(o.casas||[]).map((cs,k)=>{const v=valorCasa(cs), e=execCasa(cs);
     return `<div class="casa-r"><span class="n">${esc(cs.nome||('Casa '+(k+1)))}</span>${ruler(v?e/v:0,-1)}<span class="p">${pct(v?e/v:0)}</span></div>`;}).join('');
   let body='';
+  if(tab==='resumo') body=resumoTab(id,o,c);
   if(tab==='vistoria') body=vistoriaTab(id,o);
   if(tab==='medicao') body=medicaoTab(id,o,c);
   if(tab==='historico') body=historicoTab(id,o,c);
@@ -480,6 +503,34 @@ function obraView(id){
   ${casasR?`<div class="card"><h3>Avanço por casa</h3><div class="casas">${casasR}</div></div>`:''}
   <div class="tabs" role="tablist">${tabs.map(([k,l])=>`<button class="tab" role="tab" aria-selected="${tab===k}" data-tab="${k}">${l}</button>`).join('')}</div>
   ${body}`;
+}
+function resumoTab(id,o,c){
+  const casas=o.casas||[];
+  const linhas=GRUPOS.map(g=>{
+    const its=ITENS.filter(it=>it[2]===g); let v=0,e=0;
+    casas.forEach(cs=>{const vc=valorCasa(cs); its.forEach(it=>{v+=it[3]/100*vc; e+=num(cs.p2?.[it[0]])*it[3]/100*vc;});});
+    return {g,v,e};
+  });
+  let xv=0,xe=0; EXTRAS.forEach(ex=>{const v=extraValor(o,ex); xv+=v; xe+=v*num(o.extras?.[ex.k]?.pct);});
+  if(xv>0) linhas.push({g:'Serviços extras',v:xv,e:xe});
+  const bar=p=>`<div class="rbar"><div style="width:${Math.max(0,Math.min(1,p))*100}%"></div></div>`;
+  const disp=c.contrato-c.pago, rec=c.exec-c.pago, pz=prazoTxt(c.prazo);
+  const rows=linhas.map(l=>`<tr><td><b>${esc(l.g)}</b></td><td class="r num">${brl(l.v,2)}</td><td class="r num">${brl(l.e,2)}</td><td class="r num">${brl(l.v-l.e,2)}</td><td class="bcell">${bar(l.v?l.e/l.v:0)}</td><td class="r num">${pct(l.v?l.e/l.v:0)}</td></tr>`).join('');
+  return `<div id="resumo">
+  <div class="rs-head"><div><div class="rs-t">${esc(tituloObra(o))}</div><div class="hint">Empreiteiro: ${esc(o.empreiteiro||'—')} · ${casas.length} casa(s) · ${casas.reduce((a,x)=>a+num(x.area),0).toLocaleString('pt-BR')} m² × ${brl(PARAMS.rm2)} · posição em ${fmtDate(today())}</div></div><div class="mark rs-logo">IS</div></div>
+  <div class="rs-tot">
+    <div><div class="l">Valor do contrato</div><div class="v num">${brl(c.contrato,2)}</div></div>
+    <div><div class="l">Executado</div><div class="v num" style="color:var(--blue)">${brl(c.exec,2)}</div><div class="s">${pct(c.pExec)} da obra</div></div>
+    <div><div class="l">Já pago</div><div class="v num">${brl(c.pago,2)}</div><div class="s">${pct(c.pPago)} do contrato</div></div>
+    <div class="hl"><div class="l">Disponível no contrato</div><div class="v num">${brl(disp,2)}</div><div class="s">contrato − já pago</div></div>
+  </div>
+  <div class="rs-sit ${rec>=0?'ok':'bad'}">${rec>=0?`Saldo a receber pelo executado: <b class="num">${brl(rec,2)}</b>`:`Pago acima do executado: <b class="num">${brl(-rec,2)}</b>`}<span> · Prazo: ${esc(pz.v)}${c.prazo?` (término ${fmtDate(c.prazo.fim)})`:''}</span></div>
+  <div class="card"><h3>Resumo por etapa</h3><div class="wrap"><table class="t rs"><thead><tr><th>Etapa</th><th class="r">Valor</th><th class="r">Executado</th><th class="r">A executar</th><th></th><th class="r">%</th></tr></thead>
+  <tbody>${rows}</tbody>
+  <tfoot><tr><td>TOTAL DA OBRA</td><td class="r num">${brl(c.contrato,2)}</td><td class="r num">${brl(c.exec,2)}</td><td class="r num">${brl(c.contrato-c.exec,2)}</td><td class="bcell">${bar(c.pExec)}</td><td class="r num">${pct(c.pExec)}</td></tr></tfoot></table></div>
+  <p class="hint" style="margin-top:8px">Executado = avanço medido em vistoria × valor de cada etapa. Os pagamentos são feitos sobre o total da obra, não por etapa.</p></div>
+  </div>
+  <div class="row-btns noprint"><button class="btn blue" onclick="window.print()">Imprimir / salvar PDF</button></div>`;
 }
 function vistoriaTab(id,o){
   const casas=o.casas||[]; if(!casas.length) return '<div class="empty">Cadastre as casas na aba Dados da obra.</div>';
