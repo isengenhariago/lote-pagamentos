@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%22393.06%20295.39%201133.88%201125.61%22%20%3E%3Cpath%20fill%3D%22%23001C37%22%20d%3D%22M%201526.9375%20858.191406%20L%201444.164062%20940.363281%20L%201393.136719%20991.015625%20L%201310.363281%201073.183594%20L%201284.851562%201098.511719%20L%201176.566406%201206.007812%20L%201093.789062%201288.179688%20L%201042.765625%201338.832031%20L%20959.992188%201421.003906%20L%20877.21875%201338.832031%20L%20826.195312%201288.179688%20L%20908.96875%201206.007812%20L%20959.992188%201155.355469%20L%201042.765625%201073.183594%20L%201068.277344%201047.859375%20L%201151.050781%20965.6875%20L%201176.566406%20940.363281%20L%201259.339844%20858.191406%20L%201176.566406%20776.035156%20L%201093.804688%20858.207031%20L%20960.007812%20991.03125%20L%20877.234375%201073.183594%20L%20743.433594%201206.007812%20L%20717.921875%201180.679688%20L%20475.835938%20940.363281%20L%20393.0625%20858.191406%20L%20526.863281%20725.367188%20L%20609.636719%20643.214844%20L%20743.433594%20510.390625%20L%20826.207031%20592.5625%20L%20877.234375%20643.214844%20L%20851.722656%20668.539062%20L%20743.433594%20776.035156%20L%20660.660156%20858.191406%20L%20743.433594%20940.363281%20L%20826.207031%20858.207031%20L%20960.007812%20725.382812%20L%201042.765625%20643.214844%20L%201176.566406%20510.390625%20L%201202.078125%20535.714844%20L%201284.851562%20617.886719%20L%201310.363281%20643.214844%20L%201393.136719%20725.367188%20L%201444.164062%20776.019531%20Z%20M%201526.9375%20858.191406%22/%3E%3Cpath%20fill%3D%22%230071B9%22%20d%3D%22M%201093.445%20427.865%20L%20960.000%20294.420%20L%20826.555%20427.865%20L%20960.000%20561.311%20Z%22/%3E%3C/svg%3E">
+<meta name="theme-color" content="#001C37">
 <title>Lote de Pagamento – IS Engenharia</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -12,19 +14,19 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#f3f1ec; --surface:#ffffff; --ink:#1c1f1a; --muted:#6b6d66; --line:#dcd8cf;
-  --verde:#1a3a2a; --verde2:#2d5c42; --verde-lt:#e6f0e9; --ouro:#b8943c; --ouro-lt:#f7efdb;
+  --bg:#F1F3F5; --surface:#ffffff; --ink:#001C37; --muted:#4D6073; --line:#D9DEE4;
+  --verde:#001C37; --verde2:#0071B9; --verde-lt:#F1F3F5; --ouro:#0071B9; --ouro-lt:#F1F3F5;
   --alerta:#a33a2a; --alerta-lt:#f8e3de; --ok:#1f6b3d;
   --font:'Barlow',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
   --cond:'Barlow Condensed','Arial Narrow',system-ui,sans-serif;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#121512; --surface:#1b201c; --ink:#ecebe6; --muted:#a3a59d; --line:#2f3530;
-  --verde:#2f6b4b; --verde2:#3f8a61; --verde-lt:#1f2e25; --ouro:#d1ad55; --ouro-lt:#2d2718;
+  --bg:#00111F; --surface:#001C37; --ink:#FFFFFF; --muted:#94969A; --line:#1E3B5C;
+  --verde:#0071B9; --verde2:#0071B9; --verde-lt:#0A2540; --ouro:#0071B9; --ouro-lt:#0A2540;
   --alerta:#e2735f; --alerta-lt:#3a211c; --ok:#6cc48f;}}
 :root[data-theme="dark"]{
-  --bg:#121512; --surface:#1b201c; --ink:#ecebe6; --muted:#a3a59d; --line:#2f3530;
-  --verde:#2f6b4b; --verde2:#3f8a61; --verde-lt:#1f2e25; --ouro:#d1ad55; --ouro-lt:#2d2718;
+  --bg:#00111F; --surface:#001C37; --ink:#FFFFFF; --muted:#94969A; --line:#1E3B5C;
+  --verde:#0071B9; --verde2:#0071B9; --verde-lt:#0A2540; --ouro:#0071B9; --ouro-lt:#0A2540;
   --alerta:#e2735f; --alerta-lt:#3a211c; --ok:#6cc48f;}
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
@@ -37,7 +39,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .top{background:var(--verde);color:#fff;border-radius:14px;padding:16px 18px 14px;margin-bottom:12px}
 .top h1{font-family:var(--cond);font-weight:700;font-size:26px;margin:0;letter-spacing:.2px}
 .top .sub{font-size:13px;opacity:.8;margin-top:2px}
-.demo{display:inline-block;background:var(--ouro);color:#1a3a2a;font-weight:600;font-size:12px;border-radius:6px;padding:2px 8px;margin-top:8px}
+.demo{display:inline-block;background:var(--ouro);color:#FFFFFF;font-weight:600;font-size:12px;border-radius:6px;padding:2px 8px;margin-top:8px}
 .janela{display:flex;gap:6px;margin-top:12px}
 .janela button{flex:1;border:1px solid rgba(255,255,255,.35);background:transparent;color:#fff;border-radius:8px;padding:7px 0;font-weight:600;font-size:14px}
 .janela button[aria-pressed="true"]{background:#fff;color:var(--verde);border-color:#fff}
@@ -72,7 +74,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .acoes{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 .btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:9px;padding:9px 14px;font-weight:600;font-size:14px}
 .btn.pri{background:var(--verde);border-color:var(--verde);color:#fff}
-.btn.ouro{background:var(--ouro);border-color:var(--ouro);color:#1a3a2a}
+.btn.ouro{background:var(--ouro);border-color:var(--ouro);color:#FFFFFF}
 .btn[disabled]{opacity:.45;cursor:not-allowed}
 .acoes select{font:inherit;font-size:14px;border:1px solid var(--line);border-radius:9px;padding:8px;background:var(--surface);color:var(--ink)}
 .tag{font-size:12px;font-weight:600;border-radius:6px;padding:2px 8px}
@@ -95,10 +97,10 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .linha1.esq{align-items:flex-start}
 .conta-h.esq{justify-content:flex-start}
 .conta-h.esq .tot{text-align:left;order:-1;min-width:112px}
-.agrup{margin-top:8px;padding:8px 10px;border:1px dashed var(--ouro);border-radius:8px;background:rgba(201,169,97,.08);font-size:12px;line-height:1.5}
+.agrup{margin-top:8px;padding:8px 10px;border:1px dashed var(--ouro);border-radius:8px;background:rgba(0,113,185,.08);font-size:12px;line-height:1.5}
 .agrup b{color:var(--ouro);letter-spacing:.3px}
-.agrup .pt{display:flex;justify-content:space-between;gap:8px;border-top:1px solid rgba(201,169,97,.25);padding-top:3px;margin-top:3px}
-.etapa{display:inline-block;margin-top:4px;padding:2px 8px;border-radius:6px;background:rgba(201,169,97,.18);color:var(--ouro);font-size:12px;font-weight:700;letter-spacing:.3px;text-transform:uppercase}
+.agrup .pt{display:flex;justify-content:space-between;gap:8px;border-top:1px solid rgba(0,113,185,.25);padding-top:3px;margin-top:3px}
+.etapa{display:inline-block;margin-top:4px;padding:2px 8px;border-radius:6px;background:rgba(0,113,185,.18);color:var(--ouro);font-size:12px;font-weight:700;letter-spacing:.3px;text-transform:uppercase}
 .pg{padding:12px 14px;border-top:1px solid var(--line)}
 .pg:first-of-type{border-top:0}
 .pg.pago{opacity:.5}
